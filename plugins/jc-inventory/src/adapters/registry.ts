@@ -11,7 +11,8 @@
  */
 
 import { Service, type Context } from '@deepseek-ai/cordis'
-import type { AdapterConnectOptions, AdapterInfo, JcInventoryAdapterModule, JcInventoryData } from '../contract.ts'
+import type { AdapterConnectOptions, AdapterDialect, AdapterInfo, JcInventoryAdapterModule, JcInventoryData } from '../contract.ts'
+import { importGeneratedModule } from '../meta/generate.ts'
 import { sqliteDemoAdapter } from './sqlite-demo.ts'
 
 declare module '@deepseek-ai/cordis' {
@@ -63,6 +64,8 @@ export default class JcInventoryAdapterRegistry extends Service {
   private activeError: string | null = null
   private activatedAt = ''
   private readonly history: AdapterSwitchRecord[] = []
+  /** 最近一次接入连接（inv_regenerate_adapter 对当前连接重跑生成用）。 */
+  private lastConnect: { name: string; dialect: AdapterDialect; options: AdapterConnectOptions } | null = null
 
   constructor(ctx: Context) {
     super(ctx, 'jcInventoryAdapters')
@@ -129,6 +132,40 @@ export default class JcInventoryAdapterRegistry extends Service {
       this.record(module.info.name, module.info.origin, 'unavailable', reason)
       this.ctx.logger.warn(`[jc-inventory] 适配器 ${name} 连接失败：${reason}`)
     }
+  }
+
+  /**
+   * 激活一个元流程产物（SPEC §5.2 第 5 步）：动态 import 带缓存戳热加载，
+   * origin/name/dialect 由 registry 盖章（不信任生成代码自述），connect 成功
+   * 即重绑定 jcInventoryData。激活失败保留原适配器继续服务，失败只记历史。
+   */
+  async activateGenerated(name: string, dialect: AdapterDialect, options: AdapterConnectOptions): Promise<void> {
+    const at = new Date().toISOString()
+    try {
+      const raw = await importGeneratedModule(name)
+      const module: JcInventoryAdapterModule = {
+        ...raw,
+        info: { ...raw.info, name, dialect, origin: 'generated', description: raw.info.description || '元流程生成的数据适配器' },
+      }
+      const data = await module.connect(options)
+      this.activeModule = module
+      this.lastConnect = { name, dialect, options }
+      this.swap(module.info, data, at)
+    } catch (error) {
+      const reason = error instanceof Error ? error.message : String(error)
+      this.record(name, 'generated', 'unavailable', reason)
+      this.ctx.logger.warn(`[jc-inventory] 生成适配器 ${name} 激活失败：${reason}`)
+    }
+  }
+
+  /** 最近一次接入连接；未接入过（仅内置演示适配器）为 null。 */
+  get currentConnection(): { name: string; dialect: AdapterDialect; options: AdapterConnectOptions } | null {
+    return this.lastConnect
+  }
+
+  /** 记住一次接入连接（生成循环结束后、激活确认前调用，供 regenerate 复用）。 */
+  rememberConnection(name: string, dialect: AdapterDialect, options: AdapterConnectOptions): void {
+    this.lastConnect = { name, dialect, options }
   }
 
   /** 切换激活实现：先断开旧连接，再登记新实现（重绑定而非重复注册）。 */

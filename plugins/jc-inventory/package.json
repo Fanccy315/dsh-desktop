@@ -19,7 +19,8 @@
     "typecheck": "tsc -p tsconfig.json",
     "check": "yarn run build && yarn run typecheck",
     "gen": "node generator/generate.ts",
-    "gen:alt": "node generator/alt-schema.ts"
+    "gen:alt": "node generator/alt-schema.ts",
+    "verify:meta": "node generator/verify-metaflow.mjs"
   },
   "peerDependencies": {
     "@deepseek-ai/cordis": "^4.0.4",
