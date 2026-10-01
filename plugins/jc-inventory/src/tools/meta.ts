@@ -36,7 +36,7 @@ export function apply(ctx: Context) {
     async execute() {
       const status = ctx.jcInventoryData.status()
       const note = !status.current.available && status.current.origin === 'builtin'
-        ? '内置演示适配器为 W1 占位：查询实现与 jc.db 生成器在 W2 迁移（SPEC §11）'
+        ? '内置演示适配器连接失败：请先运行 yarn gen 生成演示库 data/jc.db'
         : ''
       return { current: status.current, history: status.history, note }
     },

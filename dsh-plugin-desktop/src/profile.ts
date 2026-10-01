@@ -108,6 +108,10 @@ const DEFAULT_DESKTOP_SHELL_MODE: DesktopShellMode = 'compatibility'
 const DEFAULT_DESKTOP_PORT = DESKTOP_DEFAULT_WEB_PORT
 const DESKTOP_WEB_SERVER_ROW_ID = 'desktop-webserver'
 const DESKTOP_WEB_SERVER_PACKAGE = `${DESKTOP_PACKAGE_NAME}/webserver`
+// 内置 JC 库管智能体插件（SPEC §3 内置方式）。随安装包内置进每个 Host
+// generation，用户不可禁用卸载（与 desktop-shell / webserver 同级）。
+const JC_INVENTORY_ROW_ID = 'jc-inventory'
+const JC_INVENTORY_PACKAGE = 'dsh-plugin-jc-inventory'
 // dsh 0.1.7-alpha.1 deleted `@deepseek-ai/dsh-settings-file` (upstream 601d6761e4) and
 // moved persisted form values into the active profile's own patch layer. The row that
 // carries the settings service is now the profile-owned `@deepseek-ai/dsh-settings`.
@@ -1564,6 +1568,14 @@ export function prepareDesktopProfile(
   if ((telemetryDisabled ?? '') !== '' && rows.has('session-telemetry-otel')) {
     patches.push({ id: 'session-telemetry-otel', disabled: true })
   }
+  // 内置 JC 库管智能体（SPEC §3）：launcher patch 注入每个 profile，
+  // 与 desktop-shell / webserver 同级，用户不可禁用卸载。
+  patches.push({
+    insert: [{
+      id: JC_INVENTORY_ROW_ID,
+      name: JC_INVENTORY_PACKAGE,
+    }],
+  })
   // Upstream mounts its Desktop product analytics for every Profile named
   // `desktop` and reports to DeepSeek's collector by default. DSH Desktop does
   // not take part in that collection, so both rows stay off after every bundle

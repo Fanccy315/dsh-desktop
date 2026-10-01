@@ -345,6 +345,11 @@ virtualStoreDirMaxLength: 60
       name: 'dsh-plugin-desktop/webserver',
       config: { host: '127.0.0.1', port: 43_120 },
     }))
+    // 内置 JC 库管智能体（SPEC §3 内置方式）随每个 profile 注入，不可禁用卸载。
+    expect(inserted).toContainEqual(expect.objectContaining({
+      id: 'jc-inventory',
+      name: 'dsh-plugin-jc-inventory',
+    }))
     // dsh 0.1.7-alpha.1 replaced filesystem preset discovery with preset declarations
     // carried by patch files, so Desktop no longer pins preset roots on the registry
     // row: `roots` and `includeUserRoot` are not fields of any 0.1.7 Config.
