@@ -1,0 +1,23 @@
+{
+  "extends": "../../deepseek-harness/tsconfig.base.json",
+  "compilerOptions": {
+    "composite": false,
+    "incremental": false,
+    "declaration": false,
+    "declarationMap": false,
+    "sourceMap": false,
+    "noEmit": true,
+    "lib": ["esnext"],
+    "noImplicitAny": false,
+    "noImplicitThis": false,
+    "strictFunctionTypes": false,
+    "noUncheckedIndexedAccess": false,
+    "exactOptionalPropertyTypes": false,
+    "noImplicitOverride": false,
+    "noUnusedLocals": false,
+    "noUnusedParameters": false,
+    "typeRoots": ["../../deepseek-harness/node_modules/@types"],
+    "types": ["node"]
+  },
+  "include": ["src"]
+}
