@@ -1,6 +1,6 @@
 /**
  * 四个 Agent 的确定性业务逻辑（SPEC §9.3–9.6）。
- * 工具插件的 execute 与调度器共用本模块；**只依赖数据契约 JcInventoryData**，
+ * 工具插件的 execute 调用本模块；**只依赖数据契约 JcInventoryData**，
  * 阈值经 getNumberSetting 读 settings 表，数值计算全部在此完成，LLM 只做路由与文案。
  *
  * 口径纪律（SPEC §2）：旧实现把偏差率/库龄/跨表 JOIN 算在服务层 SQL 里，

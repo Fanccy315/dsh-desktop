@@ -239,7 +239,7 @@ export type NewSuggestion = {
   reason: Record<string, JsonValue>
 }
 
-// —— 四个 Agent 的结果类型（工具输出、调度器与 LLM 文案共用）——
+// —— 四个 Agent 的结果类型（工具输出与 LLM 文案共用）——
 
 /** 账实偏差风险行（健康扫描产出）。cause 来自近期「紧急出库未录ERP」流水标注。 */
 export type DeviationRiskItem = {
@@ -255,7 +255,7 @@ export type DeviationRiskItem = {
   cause: string | null
 }
 
-/** 库存健康扫描报告（inv_health_scan / 调度器共用）。 */
+/** 库存健康扫描报告（inv_health_scan 输出）。 */
 export type HealthReport = {
   warehouse: string | null
   scannedSkus: number

@@ -16,7 +16,6 @@ import * as healthScanTools from './tools/health-scan.ts'
 import * as shortageTools from './tools/shortage.ts'
 import * as deadStockTools from './tools/dead-stock.ts'
 import * as replenishTools from './tools/replenish.ts'
-import * as scheduler from './scheduler.ts'
 import * as prompts from './prompts.ts'
 
 export const name = 'jc-inventory'
@@ -31,6 +30,5 @@ export function apply(ctx: Context): void {
   ctx.plugin(shortageTools)
   ctx.plugin(deadStockTools)
   ctx.plugin(replenishTools)
-  ctx.plugin(scheduler)
   ctx.plugin(prompts)
 }

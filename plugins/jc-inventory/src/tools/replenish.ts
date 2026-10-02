@@ -9,7 +9,7 @@ import { runReplenish } from '../scans.ts'
 export const name = 'jc-inventory-tools-replenish'
 export const inject = ['tools', 'jcInventoryData']
 
-const UNAVAILABLE = '库存数据库不可用：数据服务初始化失败（见启动日志）。'
+const UNAVAILABLE = '库存数据源不可用（原因可用 inv_adapter_status 查询）。请引导用户二选一：接入既有数据库（inv_connect_database，元流程自动生成适配器）或生成演示库（inv_prepare_demo_db）。'
 
 export function apply(ctx: Context) {
   ctx.tools.register(defineTool({

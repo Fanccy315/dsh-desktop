@@ -6,6 +6,8 @@
  *   ——不存在「生成即生效」（SPEC §5.3）；候选缓存于 pending，二次调用不重跑。
  * - inv_regenerate_adapter：对当前接入连接重跑生成+校验（校验失败重试或
  *   范例升级后刷新）。
+ * - inv_prepare_demo_db：生成演示库 data/jc.db 并激活内置演示适配器
+ *   （数据源不可用时的兜底，演示库兜底路径的运行时入口，SPEC §7）。
  * - inv_adapter_status：数据源状态与切换历史（W1 落地，保留）。
  *
  * 工具只做 schema 声明与结果转述，流程编排数值全部来自 meta/ 服务层。
@@ -14,7 +16,9 @@
 import { basename } from 'node:path'
 import type { Context } from '@deepseek-ai/cordis'
 import { defineTool } from '@deepseek-ai/dsh-tools'
+import { DEMO_DB_PATH } from '../adapters/sqlite-demo.ts'
 import type { AdapterConnectOptions, AdapterDialect } from '../contract.ts'
+import { generateSample, type GenerateResult } from '../demo-db/generate.ts'
 import { introspectDatabase } from '../meta/introspect.ts'
 import { runMetaGeneration, sanitizeAdapterName, type MetaFlowResult } from '../meta/generate.ts'
 
@@ -70,11 +74,10 @@ export function apply(ctx: Context) {
       schema: {
         type: 'object',
         properties: {
-          status: { type: 'string', description: 'awaiting_confirmation / activated / introspect_failed / generation_failed / activation_failed' },
-          summary: { type: 'string', description: '结论摘要（复述给用户）' },
-          report: { type: 'json', description: '明细：映射表、探针结果、缺口、错误、当前数据源状态' },
+          status: { type: 'string', required: true, description: 'awaiting_confirmation / activated / introspect_failed / generation_failed / activation_failed' },
+          summary: { type: 'string', required: true, description: '结论摘要（复述给用户）' },
+          report: { type: 'json', required: true, description: '明细：映射表、探针结果、缺口、错误、当前数据源状态' },
         },
-        required: ['status', 'summary', 'report'],
         additionalProperties: false,
       },
       render: (_args, value) => [{ type: 'text', text: JSON.stringify(value, null, 2) }],
@@ -98,7 +101,7 @@ export function apply(ctx: Context) {
         return ret(
           ok ? 'activated' : 'activation_failed',
           ok
-            ? `数据源已激活：${status.current.name}（${status.current.dialect}，元流程生成适配器）。四个库存 Agent 与定时任务现在对新库工作，可立即查询验证。`
+            ? `数据源已激活：${status.current.name}（${status.current.dialect}，元流程生成适配器）。四个库存 Agent 现在对新库工作，可立即查询验证。`
             : `激活失败：${status.current.unavailableReason ?? '连接失败（见切换历史）'}。原数据源继续服务。`,
           { adapterStatus: status },
         )
@@ -155,11 +158,10 @@ export function apply(ctx: Context) {
       schema: {
         type: 'object',
         properties: {
-          status: { type: 'string' },
-          summary: { type: 'string' },
-          report: { type: 'json' },
+          status: { type: 'string', required: true },
+          summary: { type: 'string', required: true },
+          report: { type: 'json', required: true },
         },
-        required: ['status', 'summary', 'report'],
         additionalProperties: false,
       },
       render: (_args, value) => [{ type: 'text', text: JSON.stringify(value, null, 2) }],
@@ -210,6 +212,60 @@ export function apply(ctx: Context) {
   }))
 
   ctx.tools.register(defineTool({
+    name: 'inv_prepare_demo_db',
+    description: '生成演示库 data/jc.db 并激活内置演示适配器（数据源不可用时的兜底，适合演示/试用；有真实数据库时改用 inv_connect_database 走元流程接入）。同 seed 结果逐行可复现，基线统计与报告口径对齐；当前已激活元流程生成的外部库时拒绝执行，避免把用户真实库切回演示库。',
+    parameters: {
+      seed: { type: 'number', description: '可选：随机种子（缺省用固定默认种子；基线校验未过时可换 seed 重跑）' },
+    },
+    output: {
+      schema: {
+        type: 'object',
+        properties: {
+          status: { type: 'string', required: true, description: 'prepared / already_available / baseline_failed / refused / generation_failed / activation_failed' },
+          summary: { type: 'string', required: true, description: '结论摘要（复述给用户）' },
+          report: { type: 'json', required: true, description: '明细：生成路径、seed、as-of、基线结论、当前数据源状态' },
+        },
+        additionalProperties: false,
+      },
+      render: (_args, value) => [{ type: 'text', text: JSON.stringify(value, null, 2) }],
+    },
+    async execute(args) {
+      const registry = ctx.jcInventoryAdapters
+      const before = ctx.jcInventoryData.status()
+      if (before.current.origin === 'generated') {
+        return ret('refused', `当前数据源是元流程接入的外部库（${before.current.name}），不切换回演示库。`, { adapterStatus: before })
+      }
+      if (before.current.name === 'sqlite-demo' && before.current.available) {
+        return ret('already_available', '演示库已存在且内置适配器正在服务，无需生成。要改用外部数据库请调用 inv_connect_database。', { adapterStatus: before })
+      }
+
+      let result: GenerateResult
+      try {
+        result = await generateSample({ path: DEMO_DB_PATH, seed: args.seed, quiet: true })
+      } catch (error) {
+        return ret('generation_failed', `演示库生成失败：${error instanceof Error ? error.message : String(error)}`, { path: DEMO_DB_PATH })
+      }
+      await registry.reactivateDefault()
+      const after = ctx.jcInventoryData.status()
+      if (!after.current.available) {
+        return ret('activation_failed', `演示库已生成（seed=${result.seed}）但激活失败：${after.current.unavailableReason ?? '连接失败（见切换历史）'}。`, {
+          path: result.path,
+          seed: result.seed,
+          adapterStatus: after,
+        })
+      }
+      const asOf = new Date(result.asOfMs).toISOString().slice(0, 10)
+      return ret(
+        result.passed ? 'prepared' : 'baseline_failed',
+        result.passed
+          ? `演示库已生成并激活（seed=${result.seed}，as-of=${asOf}），基线校验全部通过。四个库存 Agent 现在可用，可立即查询验证。`
+          : `演示库已生成并激活（seed=${result.seed}，as-of=${asOf}），但基线统计超出报告口径 ±10%；可再次调用本工具换一个 seed 重跑。`,
+        { path: result.path, seed: result.seed, asOf, baselinePassed: result.passed, adapterStatus: after },
+      )
+    },
+  }))
+
+  ctx.tools.register(defineTool({
     name: 'inv_adapter_status',
     description: '查询库存数据源状态：当前适配器（名称/方言/来源 builtin 或 generated/描述）、可用性及原因、激活与切换历史。接入新库或数据异常时先用本工具确认现状。',
     parameters: {},
@@ -219,12 +275,12 @@ export function apply(ctx: Context) {
         properties: {
           current: {
             type: 'json',
+            required: true,
             description: '当前激活的适配器（name/dialect/origin/description/available/activatedAt/unavailableReason）',
           },
-          history: { type: 'json', description: '切换历史（name/origin/event/at/detail）' },
-          note: { type: 'string', description: '里程碑说明，无则为空串' },
+          history: { type: 'json', required: true, description: '切换历史（name/origin/event/at/detail）' },
+          note: { type: 'string', required: true, description: '里程碑说明，无则为空串' },
         },
-        required: ['current', 'history', 'note'],
         additionalProperties: false,
       },
       render: (_args, value) => [{ type: 'text', text: JSON.stringify(value, null, 2) }],
@@ -232,7 +288,7 @@ export function apply(ctx: Context) {
     async execute() {
       const status = ctx.jcInventoryData.status()
       const note = !status.current.available && status.current.origin === 'builtin'
-        ? '内置演示适配器连接失败：请先运行 yarn gen 生成演示库 data/jc.db'
+        ? '内置演示适配器连接失败：可调用 inv_prepare_demo_db 生成演示库，或用 inv_connect_database 接入外部数据库'
         : ''
       return { current: status.current, history: status.history, note }
     },

@@ -4,7 +4,7 @@
  *
  * 业务工具 `inject: ['tools', 'jcInventoryData']` 调用本服务，
  * 永远不直接开数据库连接、不知道当前库是什么引擎；
- * 适配器切换后本服务的代理目标随之重绑定，业务工具与调度器立即对新库工作。
+ * 适配器切换后本服务的代理目标随之重绑定，业务工具立即对新库工作。
  */
 
 import { Service, type Context } from '@deepseek-ai/cordis'

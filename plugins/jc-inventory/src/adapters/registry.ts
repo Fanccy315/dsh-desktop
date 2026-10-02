@@ -109,6 +109,14 @@ export default class JcInventoryAdapterRegistry extends Service {
   }
 
   /**
+   * 重新激活默认内置适配器（sqlite-demo）：inv_prepare_demo_db 生成演示库后调用，
+   * 让 jcInventoryData 重绑定到新生成的 data/jc.db。
+   */
+  async reactivateDefault(): Promise<void> {
+    await this.activateBuiltin(DEFAULT_ADAPTER)
+  }
+
+  /**
    * 激活一个内置适配器。连接失败不抛出：registry 服务保持可用，
    * 状态记录原因，业务工具在查询时统一得到不可用提示（fail loud but not crash）。
    */

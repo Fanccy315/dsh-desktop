@@ -28,12 +28,12 @@ src/
 │   ├── sqlite-demo.ts # 内置演示适配器（W1 占位 → W2 完整实现 → W3 元流程范例）
 │   └── generated/     # 元流程产物落盘（gitignore）
 ├── meta/              # W3：内省 / 生成 / 校验 / 提示词
+├── demo-db/           # 演示库生成核心（generate.ts / scenarios.ts，编译进 lib 供运行时调用）
 ├── tools/             # inv_* 工具（W1：meta.ts）
 ├── scans.ts           # W2：四 Agent 确定性业务逻辑
 ├── predict.ts         # W2：统计预测纯函数
-├── prompts.ts         # W2/W4：系统提示词插件
-└── scheduler.ts       # W2/W4：定时任务插件
-generator/             # W2：演示库生成器（generate.ts / scenarios.ts / alt-schema.ts）
+└── prompts.ts         # W2/W4：系统提示词插件
+generator/             # 生成器 CLI 包装 + alt-schema + 元流程离线验收脚本
 data/                  # 生成的 jc.db（gitignore）
 ```
 

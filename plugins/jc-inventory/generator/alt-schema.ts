@@ -17,11 +17,11 @@ import { rmSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
 import type { DatabaseSync } from 'node:sqlite'
-import { generateSample } from './generate.ts'
+import { generateSample } from '../src/demo-db/generate.ts'
 import {
   CASE2_QTY_PER, CASE2_STOCK, CASE2_IN_TRANSIT, CASE2_WORK_ORDER, CASE2_WO_QTY,
   CASE3_QTY_BOOK, CASE3_QTY_PHYSICAL, CASE3_SKU,
-} from './scenarios.ts'
+} from '../src/demo-db/scenarios.ts'
 
 const DAY = 86_400_000
 

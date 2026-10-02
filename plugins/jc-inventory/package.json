@@ -2,7 +2,7 @@
   "name": "dsh-plugin-jc-inventory",
   "version": "0.1.0",
   "private": true,
-  "description": "JC 公司库管智能体（DSH Desktop 内置插件：数据契约 + 适配层 + 元流程，SPEC docs/SPEC.md）",
+  "description": "JC 公司库管智能体",
   "license": "MIT",
   "type": "module",
   "main": "lib/index.js",

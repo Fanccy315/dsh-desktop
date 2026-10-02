@@ -1,7 +1,7 @@
 /**
  * 内置 SQLite 演示适配器（SPEC §3：元流程首个实例 + 提示词范例）。
  *
- * 本文件把 generator/ 产出的 data/jc.db（snake_case 物理表，SPEC §6）搬运进
+ * 本文件把 src/demo-db/ 生成的 data/jc.db（snake_case 物理表，SPEC §6）搬运进
  * JcInventoryData 契约：SQL 全部收敛于此，只返回**原始数据**的语义视图，
  * 不做任何派生计算（偏差率/库龄/风险分级/预测在 src/scans.ts，SPEC §2）。
  *
@@ -40,8 +40,8 @@ import type {
   WorkOrderQuery,
 } from '../types.ts'
 
-/** 默认演示库：<包根>/data/jc.db（src/ 与 lib/ 编译态下 ../../ 均回到包根）。 */
-const DEFAULT_DB_PATH = fileURLToPath(new URL('../../data/jc.db', import.meta.url))
+/** 默认演示库：<包根>/data/jc.db（src/ 与 lib/ 编译态下 ../../ 均回到包根）。inv_prepare_demo_db 生成到同一路径。 */
+export const DEMO_DB_PATH = fileURLToPath(new URL('../../data/jc.db', import.meta.url))
 
 /** SPEC §6 全部业务表；缺表在 connect 即失败（misconfiguration fails loud）。 */
 const REQUIRED_TABLES = [
@@ -410,15 +410,15 @@ const sqliteDemoAdapter: JcInventoryAdapterModule = {
     name: 'sqlite-demo',
     dialect: 'sqlite',
     origin: 'builtin',
-    description: '内置 SQLite 演示适配器（读取 generator/ 产出的 data/jc.db，兼元流程生成范例）',
+    description: '内置 SQLite 演示适配器（读取 data/jc.db，兼元流程生成范例）',
   },
 
   async connect(options?: AdapterConnectOptions): Promise<JcInventoryData> {
     // 惰性 import：与旧实现一致，避免 node:sqlite 的实验警告打断启动
     const { DatabaseSync } = await import('node:sqlite')
-    const dbPath = options?.path ?? DEFAULT_DB_PATH
+    const dbPath = options?.path ?? DEMO_DB_PATH
     if (!existsSync(dbPath)) {
-      throw new Error(`演示库不存在：${dbPath}（先运行 yarn gen 生成 data/jc.db）`)
+      throw new Error(`演示库不存在：${dbPath}（可让智能体调用 inv_prepare_demo_db 生成，或终端运行 yarn gen）`)
     }
     const db = new DatabaseSync(dbPath)
     try {
