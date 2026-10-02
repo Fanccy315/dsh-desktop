@@ -1,23 +1,27 @@
 /**
- * 系统提示词（SPEC §9.7）。
+ * 系统提示词。
  * 工具 schema 已含各自能力描述，此处只写跨工具的路由规则与全局约束，不重复任何单个工具的说明。
  */
 
-import type { Context } from '@deepseek-ai/cordis'
+import type { Context } from "@deepseek-ai/cordis";
 
 // 宿主（DSH Desktop）提供 systemPrompt 服务（@deepseek-ai/dsh-system-prompt）；
 // 本插件只消费 section()，故在此声明最小接口面，避免为类型引入整套依赖闭包。
-declare module '@deepseek-ai/cordis' {
+declare module "@deepseek-ai/cordis" {
   interface Context {
     systemPrompt: {
       /** 注册一段有序系统提示词，返回 Cordis effect 清理器。 */
-      section(section: { name: string; order: number; text: string }): () => void
-    }
+      section(section: {
+        name: string;
+        order: number;
+        text: string;
+      }): () => void;
+    };
   }
 }
 
-export const name = 'jc-inventory-prompts'
-export const inject = ['systemPrompt']
+export const name = "jc-inventory-prompts";
+export const inject = ["systemPrompt"];
 
 const PROMPT = `你是 JC 制造公司的库管智能体，服务三类用户：仓管员（查询库存与流水、处理账实差异）、采购员（补货与紧急采购建议审核）、管理层（库存健康状况与风险摘要）。
 
@@ -43,12 +47,14 @@ const PROMPT = `你是 JC 制造公司的库管智能体，服务三类用户：
 
 数据源不可用时的引导（工具返回「库存数据源不可用」）：
 - 先调用 inv_adapter_status 查明原因，再给用户两条路：① 没有真实库、想先试用/演示 → inv_prepare_demo_db 生成演示库；② 有既有数据库 → 请用户提供库文件路径，走 inv_connect_database 元流程接入。
-- 不要编造数据，也不要在数据源恢复前给出任何库存数值。`
+- 不要编造数据，也不要在数据源恢复前给出任何库存数值。`;
 
 export function apply(ctx: Context) {
-  ctx.effect(() => ctx.systemPrompt.section({
-    name: 'jc-inventory:agent',
-    order: 4200,
-    text: PROMPT,
-  }))
+  ctx.effect(() =>
+    ctx.systemPrompt.section({
+      name: "jc-inventory:agent",
+      order: 4200,
+      text: PROMPT,
+    }),
+  );
 }
