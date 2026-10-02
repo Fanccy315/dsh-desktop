@@ -1,14 +1,15 @@
 name: CI
 
 on:
-  pull_request:
-    branches: [master]
-  push:
-    branches: [master]
   workflow_dispatch:
+    inputs:
+      tag:
+        description: Release tag to publish (e.g. v1.2.3)
+        required: true
+        type: string
 
 permissions:
-  contents: read
+  contents: write
 
 concurrency:
   group: ci-${{ github.workflow }}-${{ github.ref }}
@@ -122,25 +123,23 @@ jobs:
       - name: Build Windows installer
         env:
           DSH_PACKAGE_CHECK_ALREADY_RAN: "1"
-          # These artifacts are downloadable but never released, and
-          # upload-artifact recompresses the archive, so skipping electron-builder
-          # compression saves minutes without inflating the download.
-          DSH_WINDOWS_PACKAGE_COMPRESSION: store
         run: yarn workspace ${{ matrix.workspace }} dist:win
       - name: Build Windows portable archive
         env:
           DSH_PACKAGE_CHECK_ALREADY_RAN: "1"
-          DSH_WINDOWS_PACKAGE_COMPRESSION: store
         run: yarn workspace ${{ matrix.workspace }} dist:win-portable
-      # Both builds land in one dist/. Upload only the two distributables so the
-      # unpacked tree in dist/win-unpacked/ never enters the archive.
-      - name: Upload Windows artifacts
-        uses: actions/upload-artifact@v4
+      # Both builds land in one dist/. Publish only the distributables so the
+      # unpacked tree in dist/win-unpacked/ never enters the release.
+      # The first job to finish creates the release; the later one updates it
+      # (allowUpdates) instead of failing.
+      - name: Publish Windows assets to release
+        uses: ncipollo/release-action@v1
         with:
-          name: dsh-desktop-windows-x64
-          path: |
-            dsh-plugin-desktop/dist/*-Portable.zip
-          if-no-files-found: error
+          tag: ${{ inputs.tag }}
+          generateReleaseNotes: true
+          allowUpdates: true
+          replacesArtifacts: true
+          artifacts: dsh-plugin-desktop/dist/*-Portable.zip
 
   # Linux x64 distribution artifacts: unsigned AppImage and Debian package
   # built on a stock ubuntu runner, mirroring the Windows packaging job.
@@ -176,13 +175,14 @@ jobs:
         env:
           DSH_PACKAGE_CHECK_ALREADY_RAN: "1"
         run: yarn workspace ${{ matrix.workspace }} dist:linux
-      - name: Upload Linux artifacts
-        uses: actions/upload-artifact@v4
+      - name: Publish Linux assets to release
+        uses: ncipollo/release-action@v1
         with:
-          name: dsh-desktop-linux-x64
-          path: |
-            dsh-plugin-desktop/dist/*.AppImage
-          if-no-files-found: error
+          tag: ${{ inputs.tag }}
+          generateReleaseNotes: true
+          allowUpdates: true
+          replacesArtifacts: true
+          artifacts: dsh-plugin-desktop/dist/*.AppImage
 
   # Upstream toolchain smoke: the portable-shell scripts must resolve the
   # pinned submodule's own Yarn/pnpm release on Windows.
