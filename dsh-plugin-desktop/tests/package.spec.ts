@@ -58,6 +58,7 @@ const manifest = JSON.parse(readFileSync(new URL('package.json', packageRoot), '
       asarUnpack?: unknown
       synopsis?: unknown
       syncDesktopName?: unknown
+      artifactName?: unknown
     }
     deb?: Record<string, unknown>
   }
@@ -872,10 +873,10 @@ describe('published package surface', () => {
   it('runs platform package gates before reusing native packaging outputs', () => {
     const windowsJob = ciWorkflow.slice(
       ciWorkflow.indexOf('  desktop-windows:'),
-      ciWorkflow.indexOf('  desktop-macos:'),
+      ciWorkflow.indexOf('  desktop-linux:'),
     )
-    const macosJob = ciWorkflow.slice(
-      ciWorkflow.indexOf('  desktop-macos:'),
+    const linuxJob = ciWorkflow.slice(
+      ciWorkflow.indexOf('  desktop-linux:'),
       ciWorkflow.indexOf('  upstream-command-windows:'),
     )
 
@@ -885,16 +886,51 @@ describe('published package surface', () => {
     expect(windowsJob).toContain('run: yarn workspace ${{ matrix.workspace }} dist:win')
     expect(windowsJob).toContain('run: yarn workspace ${{ matrix.workspace }} dist:win-portable')
     expect(windowsJob).toContain('DSH_PACKAGE_CHECK_ALREADY_RAN: "1"')
-    // Smoke artifacts are never published, so CI skips their compression.
+    // These artifacts are downloadable but never released, and upload-artifact
+    // recompresses the archive, so CI still skips electron-builder compression.
     expect(windowsJob.match(/DSH_WINDOWS_PACKAGE_COMPRESSION: store/g)).toHaveLength(2)
-    expect(macosJob).not.toContain('- run: yarn check')
-    expect(macosJob).toContain('workspace: [dsh-plugin-desktop]')
-    expect(macosJob).toContain('- run: yarn workspace ${{ matrix.workspace }} check:mac-package:platform')
-    expect(macosJob).toContain('run: yarn workspace ${{ matrix.workspace }} dist:mac-smoke')
-    expect(macosJob).toContain('DSH_PACKAGE_CHECK_ALREADY_RAN: "1"')
-    expect(macosJob).not.toContain('- run: yarn dist:mac-smoke')
-    // Pull requests skip the universal merge; master pushes still package it.
-    expect(macosJob).toContain("DSH_MAC_SMOKE_ARCH: ${{ github.event_name == 'pull_request' && 'arm64' || 'universal' }}")
+    expect(linuxJob).not.toContain('- run: yarn check')
+    expect(linuxJob).toContain('workspace: [dsh-plugin-desktop]')
+    expect(linuxJob).toContain('- run: yarn workspace ${{ matrix.workspace }} check:linux-package:platform')
+    expect(linuxJob).toContain('run: yarn workspace ${{ matrix.workspace }} dist:linux')
+    expect(linuxJob).toContain('DSH_PACKAGE_CHECK_ALREADY_RAN: "1"')
+  })
+
+  it('uploads the Windows and Linux distributables and packages no macOS artifact', () => {
+    // macOS releases are built manually on a credentialed machine; CI only
+    // keeps the downloadable Windows and Linux deliverables.
+    expect(ciWorkflow).not.toContain('desktop-macos:')
+    expect(ciWorkflow).not.toContain('dist:mac-smoke')
+    const uploads = ciWorkflow.match(/uses: actions\/upload-artifact@v\d+/g) ?? []
+    expect(uploads).toHaveLength(2)
+
+    const windowsUpload = ciWorkflow.slice(
+      ciWorkflow.indexOf('name: Upload Windows artifacts'),
+      ciWorkflow.indexOf('  # Linux x64 distribution artifacts:'),
+    )
+    expect(windowsUpload).toContain('uses: actions/upload-artifact@v4')
+    expect(windowsUpload).toContain('name: dsh-desktop-windows-x64')
+    expect(windowsUpload).toContain('if-no-files-found: error')
+    // The NSIS installer and the portable ZIP share one output directory, so
+    // the globs must name the two distributables and not the unpacked tree.
+    expect(windowsUpload).toContain('dsh-plugin-desktop/dist/*-Setup.exe')
+    expect(windowsUpload).toContain('dsh-plugin-desktop/dist/*-Portable.zip')
+    expect(windowsUpload).not.toContain('win-unpacked')
+    // electron-builder renders both names from the configured artifactName
+    // templates, so a rename that outruns these globs fails the upload step.
+    expect(manifest.build?.nsis?.artifactName).toBe('DSH-Desktop-${version}-${arch}-Setup.${ext}')
+    expect(manifest.build?.win?.artifactName).toBe('DSH-Desktop-${version}-${arch}-Portable.${ext}')
+    expect(manifest.build?.linux?.artifactName).toBe('DSH-Desktop-${version}-${arch}.${ext}')
+
+    const linuxUpload = ciWorkflow.slice(
+      ciWorkflow.indexOf('name: Upload Linux artifacts'),
+      ciWorkflow.indexOf('  # Upstream toolchain smoke'),
+    )
+    expect(linuxUpload).toContain('uses: actions/upload-artifact@v4')
+    expect(linuxUpload).toContain('name: dsh-desktop-linux-x64')
+    expect(linuxUpload).toContain('if-no-files-found: error')
+    expect(linuxUpload).toContain('dsh-plugin-desktop/dist/*.AppImage')
+    expect(linuxUpload).toContain('dsh-plugin-desktop/dist/*.deb')
   })
 
   it('skips product packaging only for documentation-only changes', () => {
