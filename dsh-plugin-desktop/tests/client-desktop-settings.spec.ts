@@ -625,8 +625,8 @@ describe('Desktop native action presentation', () => {
       const dispose = installDesktopSettingsStyles(owner)
       // Model upstream claimStyles/removeOwnedStyles when another plugin loads
       // and is then disabled. An untagged sheet would disappear here.
-      if (!style.dataset.plugin) style.dataset.plugin = 'third-party-plugin'
-      if (style.dataset.plugin === 'third-party-plugin') style.remove()
+      if (!style.dataset.plugin) style.dataset.plugin = 'other-plugin'
+      if (style.dataset.plugin === 'other-plugin') style.remove()
       expect(connected).toBe(true)
       expect(style.textContent).toContain('.dshDesktopSettingsChoice')
       dispose()
