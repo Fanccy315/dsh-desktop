@@ -139,7 +139,6 @@ jobs:
         with:
           name: dsh-desktop-windows-x64
           path: |
-            dsh-plugin-desktop/dist/*-Setup.exe
             dsh-plugin-desktop/dist/*-Portable.zip
           if-no-files-found: error
 
@@ -183,7 +182,6 @@ jobs:
           name: dsh-desktop-linux-x64
           path: |
             dsh-plugin-desktop/dist/*.AppImage
-            dsh-plugin-desktop/dist/*.deb
           if-no-files-found: error
 
   # Upstream toolchain smoke: the portable-shell scripts must resolve the
