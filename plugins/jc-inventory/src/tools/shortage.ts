@@ -5,11 +5,10 @@
 import type { Context } from '@deepseek-ai/cordis'
 import { defineTool } from '@deepseek-ai/dsh-tools'
 import { runShortageCheck } from '../scans.ts'
+import { UNAVAILABLE } from './shared.ts'
 
 export const name = 'jc-inventory-tools-shortage'
 export const inject = ['tools', 'jcInventoryData']
-
-const UNAVAILABLE = '库存数据源不可用（原因可用 inv_adapter_status 查询）。请引导用户二选一：接入既有数据库（inv_connect_database，元流程自动生成适配器）或生成演示库（inv_prepare_demo_db）。'
 
 export function apply(ctx: Context) {
   ctx.tools.register(defineTool({
