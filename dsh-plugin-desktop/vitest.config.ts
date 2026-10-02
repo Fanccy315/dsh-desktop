@@ -9,7 +9,7 @@ export default defineConfig({
     // fs/promises and undici imports instead of using the live filesystem/network.
     server: {
       deps: {
-        inline: ['@deepseek-ai/dsh-host-directory-picker-browse', '@deepseek-ai/dsh-native-command', 'dshmarket'],
+        inline: ['@deepseek-ai/dsh-host-directory-picker-browse', '@deepseek-ai/dsh-native-command'],
       },
     },
     // Profile integration tests create a full package-junction closure; higher

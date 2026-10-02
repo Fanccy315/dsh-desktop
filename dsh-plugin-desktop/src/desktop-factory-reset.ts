@@ -7,7 +7,6 @@ import { DESKTOP_PACKAGE_NAME } from './product-identity.ts'
 import { clearDesktopProfilePreferences } from './profile-preferences.ts'
 import { clearDesktopProfileCheckpoint } from './profile-checkpoint.ts'
 import { clearDesktopSetupWizardState } from './setup-wizard-state.ts'
-import { selectDesktopMarketProvider } from './desktop-market.ts'
 import { clearDesktopProfilePluginState } from './desktop-plugins.ts'
 import { assertDesktopProfileName } from './profile-manager.ts'
 
@@ -102,8 +101,6 @@ export async function resetDesktopDataDirectory(
     options.clearProfileUsageHistory?.(profileDir)
     await clearDesktopProfilePluginState(join(userDataDir, 'plugin-management', 'state.json'), name)
   }
-  // A fresh Profile imports this legacy machine-level selection on first boot.
-  await selectDesktopMarketProvider(userDataDir, 'disabled')
   await mkdir(target, { recursive: false, mode: DIRECTORY_MODE })
   const recreated = lstatSync(target)
   if (!recreated.isDirectory() || recreated.isSymbolicLink()) {

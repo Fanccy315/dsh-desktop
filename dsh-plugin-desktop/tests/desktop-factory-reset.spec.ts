@@ -9,7 +9,6 @@ import {
 } from '../src/desktop-factory-reset.ts'
 import { readDesktopProfilePreferences, writeDesktopProfilePreferences } from '../src/profile-preferences.ts'
 import { completeOrSkipDesktopSetupWizard, readDesktopSetupWizardState } from '../src/setup-wizard-state.ts'
-import { readDesktopMarketStateForUserData, selectDesktopMarketProvider } from '../src/desktop-market.ts'
 import { readDesktopSetupWizardSettings } from '../src/setup-wizard-settings.ts'
 import { readDesktopDisabledBundles } from '../src/desktop-plugins.ts'
 import { clearDesktopProfileUsageHistory, desktopReleaseUserDataLocations } from '../src/profile-channel-admission.ts'
@@ -42,7 +41,6 @@ describe('Desktop factory reset', () => {
       mode: 'advanced' as const,
       openBrowser: false,
       networkExposure: 'loopback' as const,
-      market: 'community-market' as const,
       notifications: {
         enabled: false,
         notifyOnTurnCompletion: false,
@@ -59,7 +57,6 @@ describe('Desktop factory reset', () => {
       await completeOrSkipDesktopSetupWizard(userDataDir, profile, 'completed', versions)
       await completeOrSkipDesktopSetupWizard(locations.other.userDataDir, profile, 'skipped', versions)
     }
-    await selectDesktopMarketProvider(userDataDir, oldPreferences.market)
     const pluginStatePath = join(userDataDir, 'plugin-management', 'state.json')
     mkdirSync(join(userDataDir, 'plugin-management'), { recursive: true, mode: 0o700 })
     writeFileSync(pluginStatePath, JSON.stringify({
@@ -90,7 +87,6 @@ describe('Desktop factory reset', () => {
       await completeOrSkipDesktopSetupWizard(userDataDir, profile, 'skipped', versions)
       expect(readDesktopSetupWizardSettings(settings)).toEqual(defaults)
     }
-    expect(readDesktopMarketStateForUserData(userDataDir).requested).toBe('disabled')
     expect([...readDesktopDisabledBundles(pluginStatePath, 'desktop')]).toEqual([])
     expect([...readDesktopDisabledBundles(pluginStatePath, 'work')]).toEqual([])
     expect([...readDesktopDisabledBundles(pluginStatePath, 'unrelated')]).toEqual(['third-party-plugin'])
@@ -103,7 +99,6 @@ describe('Desktop factory reset', () => {
     const { root, home } = await fixture()
     const userDataDir = join(root, 'desktop-state')
     const profile = join(home, 'profiles', 'desktop')
-    await selectDesktopMarketProvider(userDataDir, 'community-market')
     await completeOrSkipDesktopSetupWizard(userDataDir, profile, 'completed', {
       desktopVersion: '2.0.6-beta.1', dshVersion: '0.1.3-alpha.2', setupRevision: 1,
     })
@@ -115,7 +110,6 @@ describe('Desktop factory reset', () => {
       trashItem: async () => { throw new Error('trash unavailable') },
     })).rejects.toThrow('trash unavailable')
 
-    expect(readDesktopMarketStateForUserData(userDataDir).requested).toBe('community-market')
     expect(readDesktopSetupWizardState(userDataDir, profile)?.outcome).toBe('completed')
     expect(existsSync(profile)).toBe(true)
   })

@@ -1,13 +1,8 @@
 /** Launcher-backed controller for the private Desktop settings API. */
 
-import type {
-  DesktopMarketProvider,
-  DesktopMarketSnapshot,
-} from './desktop-market.ts'
 import type { DesktopProfileSummary } from './profile-manager.ts'
 import type { DesktopProfiles } from './profile-service.ts'
 import type {
-  DesktopMarketSelectResponse,
   DesktopDeveloperToolsToggleResponse,
   DesktopDiagnosticsExportResponse,
   DesktopProfileCreateResponse,
@@ -16,7 +11,6 @@ import type {
   DesktopRestartResponse,
   DesktopRecoveryRestartResponse,
   DesktopRendererReloadResponse,
-  DesktopSettingsMarketView,
   DesktopSettingsProfileView,
   DesktopSettingsResponse,
   DesktopSettingsWebView,
@@ -28,12 +22,6 @@ export interface DesktopSettingsControllerBootstrap {
   /** Generation-scoped profile service. */
   readonly profiles: Pick<DesktopProfiles, 'current' | 'list' | 'create' | 'prepareSelection'>
     & Partial<Pick<DesktopProfiles, 'canDelete' | 'delete'>>
-  /** Read the latest persisted request and the startup-effective provider. */
-  readAa?(): { readonly requested: boolean; readonly effective: boolean }
-  selectAa?(enabled: boolean): Promise<void>
-  readMarket(): DesktopMarketSnapshot
-  /** Persist an explicit provider request. */
-  selectMarket(provider: DesktopMarketProvider): Promise<DesktopMarketSnapshot>
   /** Read marker-free URLs from the generation's actual WebServer and LAN snapshot. */
   readWeb(): DesktopSettingsWebView
   /** Queue an orderly restart after a response confirms persisted selection. */
@@ -70,30 +58,11 @@ export function projectDesktopSettingsProfile(
   })
 }
 
-function projectMarket(
-  value: DesktopMarketSnapshot,
-  effective: DesktopMarketProvider,
-): DesktopSettingsMarketView {
-  return Object.freeze({
-    requested: value.requested,
-    effective,
-    legacyDefaulted: value.legacyDefaulted,
-  })
-}
-
 /**
- * Generation-scoped controller for Profile and Market preferences.
- *
- * The provider composed at startup remains `effective` for this controller's
- * lifetime. Persisting another provider changes only `requested` until the
- * queued restart creates a new Host generation.
+ * Generation-scoped controller for Profile preferences.
  */
 export class DesktopSettingsController {
-  private readonly effectiveMarket: DesktopMarketProvider
-
-  constructor(private readonly bootstrap: DesktopSettingsControllerBootstrap) {
-    this.effectiveMarket = bootstrap.readMarket().effective
-  }
+  constructor(private readonly bootstrap: DesktopSettingsControllerBootstrap) {}
 
   /** Read a fresh, renderer-safe settings projection. */
   read(): DesktopSettingsResponse {
@@ -106,8 +75,6 @@ export class DesktopSettingsController {
           this.bootstrap.profiles.canDelete?.(profile.name) ?? false,
         )),
       ),
-      aa: Object.freeze(this.bootstrap.readAa?.() ?? { requested: false, effective: false }),
-      market: projectMarket(this.bootstrap.readMarket(), this.effectiveMarket),
       web: Object.freeze({
         localUrl: web.localUrl,
         lanUrls: Object.freeze([...web.lanUrls]),
@@ -142,28 +109,6 @@ export class DesktopSettingsController {
     return Object.freeze({
       response: Object.freeze({ accepted: true, restartRequired: selection.restartRequired }),
       ...(selection.restartRequired ? { afterResponse: () => selection.restart() } : {}),
-    })
-  }
-
-  /** Persist a provider and defer restart until after the response is ended. */
-  async selectMarket(
-    provider: DesktopMarketProvider,
-  ): Promise<DesktopSettingsPostResponse<DesktopMarketSelectResponse>> {
-    await this.bootstrap.selectMarket(provider)
-    const restartRequired = provider !== this.effectiveMarket
-    return Object.freeze({
-      response: Object.freeze({ accepted: true, restartRequired }),
-      ...(restartRequired ? { afterResponse: () => { this.bootstrap.scheduleRestart() } } : {}),
-    })
-  }
-
-  async selectAa(enabled: boolean): Promise<DesktopSettingsPostResponse<DesktopMarketSelectResponse>> {
-    if (!this.bootstrap.selectAa || !this.bootstrap.readAa) throw new Error('AA selection is unavailable')
-    await this.bootstrap.selectAa(enabled)
-    const restartRequired = enabled !== this.bootstrap.readAa().effective
-    return Object.freeze({
-      response: Object.freeze({ accepted: true, restartRequired }),
-      ...(restartRequired ? { afterResponse: () => { this.bootstrap.scheduleRestart() } } : {}),
     })
   }
 

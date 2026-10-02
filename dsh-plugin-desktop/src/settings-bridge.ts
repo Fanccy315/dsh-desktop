@@ -503,11 +503,9 @@ export function observeDesktopPreferenceSettings(
     const notifications = readNotifications()
     if (desktop === undefined || notifications === undefined) return
     if (namespace === DESKTOP_SETTINGS_ENTRY_ID) fileExporter?.setThreshold(desktop.logLevel)
-    const write = enqueueProfilePreferencesWrite(current => desktopProfilePreferencesFromSettings(
+    const write = enqueueProfilePreferencesWrite(() => desktopProfilePreferencesFromSettings(
       desktop,
       notifications,
-      current.market,
-      current.aaEnabled === true,
     ))
     void write.catch((cause: unknown) => {
       ctx.logger.error(

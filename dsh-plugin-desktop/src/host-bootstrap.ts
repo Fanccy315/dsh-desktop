@@ -11,9 +11,8 @@ import { createDesktopWebProfile, listDesktopProfiles, canDeleteDesktopProfile, 
 import { DesktopProfileService } from './profile-service.ts'
 import { DesktopActionsService } from './desktop-actions.ts'
 import { clearDesktopProfilePluginState, DesktopPluginsService } from './desktop-plugins.ts'
-import { desktopMarketSnapshotWithEffective, selectDesktopMarketProvider, type DesktopMarketProvider, type DesktopMarketSnapshot } from './desktop-market.ts'
 import DesktopSettingsController from './desktop-settings-controller.ts'
-import { clearDesktopProfilePreferences, desktopProfilePreferencesFromSettings, readDesktopProfilePreferences, writeDesktopProfilePreferences, type DesktopProfilePreferences, type DesktopProfilePreferencesStateV1 } from './profile-preferences.ts'
+import { clearDesktopProfilePreferences, readDesktopProfilePreferences, writeDesktopProfilePreferences, type DesktopProfilePreferences, type DesktopProfilePreferencesStateV2 } from './profile-preferences.ts'
 import { clearDesktopProfileUsageHistory, type DesktopReleaseUserDataLocations } from './profile-channel-admission.ts'
 import { desktopInstallAnchor, type PreparedDesktopProfile } from './profile.ts'
 import { desktopLanBrowserUrls, desktopLoopbackBrowserUrl } from './desktop-network.ts'
@@ -25,14 +24,6 @@ import type { DesktopStartupGenerationHost } from './startup-generation.ts'
 import { FileExporter } from './file-exporter.ts'
 import { installAgentErrorLogging } from './agent-error-logging.ts'
 import { LogFileSink } from './log-files.ts'
-
-function desktopProfileMarketSnapshot(market: DesktopMarketProvider): DesktopMarketSnapshot {
-  return Object.freeze({
-    requested: market,
-    effective: market,
-    legacyDefaulted: false,
-  })
-}
 
 export interface DesktopHostOptions {
   prepared: PreparedDesktopProfile
@@ -60,7 +51,7 @@ export interface DesktopHostOptions {
 export async function bootDesktopHost(options: DesktopHostOptions, runtime: DesktopRuntime,
   browserAccess: DesktopBrowserAccess, lanHttps: DesktopLanHttpsRuntime,
   bindHost: (host: DesktopStartupGenerationHost) => void, requestQuit: (code: number) => void,
-): Promise<() => { aaRuntime: boolean; aaOnboarding: boolean }> {
+): Promise<() => void> {
   const { prepared, profilePreferences, homeDir, activeProfileName, pluginManagementStatePath,
     selectionStatePath, marketUserDataDir, releaseUserDataLocations, desktopLaunchEnvironment,
     desktopPnpmBootstrap } = options
@@ -77,15 +68,12 @@ export async function bootDesktopHost(options: DesktopHostOptions, runtime: Desk
     let profilePreferencesWriteTail: Promise<void> = Promise.resolve()
     let profilePreferencesStopping = false
     // Setup saves from the Electron process after this Host booted; follow the
-    // durable file so its Market and AA choices are neither reverted nor hidden.
+    // durable file so its choices are neither reverted nor hidden.
     const latestProfilePreferences = (): DesktopProfilePreferences =>
       readDesktopProfilePreferences(marketUserDataDir, prepared.profile.dir) ?? currentProfilePreferences
-    const readProfilePreferences = (): DesktopProfilePreferences => {
-      try { return latestProfilePreferences() } catch { return currentProfilePreferences }
-    }
     const enqueueProfilePreferencesWrite = (
       update: (current: DesktopProfilePreferences) => DesktopProfilePreferences,
-    ): Promise<DesktopProfilePreferencesStateV1> => {
+    ): Promise<DesktopProfilePreferencesStateV2> => {
       if (profilePreferencesStopping) {
         return Promise.reject(new Error(`${BIN_NAME}: Profile preferences are stopping`))
       }
@@ -136,14 +124,12 @@ export async function bootDesktopHost(options: DesktopHostOptions, runtime: Desk
           openTerminal: () => { runtime.openTerminal() },
           requestRestart: () => runtime.requestRestart(),
         })
-        if (prepared.market.effective === 'community-market') {
-          await hostCtx.plugin(DesktopPluginsService, {
-            profileName: activeProfileName,
-            homeDir,
-            statePath: pluginManagementStatePath,
-            installAnchor: desktopInstallAnchor(),
-          })
-        }
+        await hostCtx.plugin(DesktopPluginsService, {
+          profileName: activeProfileName,
+          homeDir,
+          statePath: pluginManagementStatePath,
+          installAnchor: desktopInstallAnchor(),
+        })
         if (logSink !== undefined) {
           fileExporter = new FileExporter(logSink)
           hostCtx.logger.exporter(fileExporter)
@@ -199,22 +185,8 @@ export async function bootDesktopHost(options: DesktopHostOptions, runtime: Desk
           if (pendingSettingsRestart !== undefined) clearImmediate(pendingSettingsRestart)
           pendingSettingsRestart = undefined
         }, 'dsh-plugin-desktop: pending Desktop settings restart')
-        const readMarket = () => desktopMarketSnapshotWithEffective(
-          desktopProfileMarketSnapshot(readProfilePreferences().market),
-          prepared.market.effective,
-        )
         hostCtx.provide('desktopSettingsController', new DesktopSettingsController({
           profiles: hostCtx.desktopProfiles,
-          readMarket,
-          readAa: () => ({ requested: readProfilePreferences().aaEnabled === true, effective: prepared.aaEnabled }),
-          selectAa: async enabled => {
-            await enqueueProfilePreferencesWrite(current => desktopProfilePreferencesFromSettings(
-              current,
-              current.notifications,
-              current.market,
-              enabled,
-            ))
-          },
           readWeb: () => {
             const lan = lanHttps.snapshot()
             const lanOrigins = lan.state === 'ready' && lan.actualPort !== null
@@ -232,18 +204,6 @@ export async function bootDesktopHost(options: DesktopHostOptions, runtime: Desk
                 return new URL(DESKTOP_LAN_HTTPS_CA_PATH, origin).href
               }),
             }
-          },
-          selectMarket: async provider => {
-            await enqueueProfilePreferencesWrite(current => desktopProfilePreferencesFromSettings(
-              current,
-              current.notifications,
-              provider,
-              current.aaEnabled === true,
-            ))
-            return desktopMarketSnapshotWithEffective(
-              await selectDesktopMarketProvider(marketUserDataDir, provider),
-              prepared.market.effective,
-            )
           },
           scheduleRestart: scheduleSettingsRestart,
           scheduleRecoveryRestart: () => {
@@ -275,5 +235,5 @@ export async function bootDesktopHost(options: DesktopHostOptions, runtime: Desk
     profileBoot.markReady()
     observeDesktopPreferenceSettings(ctx, fileExporter, enqueueProfilePreferencesWrite)
     void logInactiveStartupEntries(ctx, BIN_NAME)
-  return () => ({ aaRuntime: ctx.get('agentsAnywhereRuntime') !== undefined, aaOnboarding: ctx.get('agentsAnywhereOnboarding') !== undefined })
+  return () => {}
 }

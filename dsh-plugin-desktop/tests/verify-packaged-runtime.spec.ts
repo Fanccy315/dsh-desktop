@@ -1,5 +1,4 @@
 import {
-  chmodSync,
   mkdirSync,
   mkdtempSync,
   readFileSync,
@@ -39,7 +38,6 @@ import {
   smokePackagedElectronRuntime,
   summarizeUnpackedRuntime,
   verifyPackagedRuntime,
-  verifyPackagedAgentsAnywhere,
   verifySelectiveUnpackedRuntime,
   type ArchiveHeaderReader,
   type FileProbe,
@@ -277,47 +275,9 @@ describe('packaged desktop runtime verification', () => {
         expect(received).toBe(summary)
         calls.push('report')
       },
-      () => { calls.push('aa') },
     )
 
-    expect(calls).toEqual(['static', 'aa', 'report'])
-  })
-
-  it.skipIf(process.platform === 'win32')('rejects a 0644 packaged uv before signing', () => {
-    const root = mkdtempSync(join(tmpdir(), 'dsh-packaged-uv-'))
-    try {
-      const base = context(root, 'darwin', 4)
-      const target: PackagedRuntimeContext = {
-        ...base, packager: { ...base.packager, platformSpecificBuildOptions: { asar: false } },
-      }
-      const files = ['arm64', 'x64'].map(arch => join(
-        resolvePackagedApplicationRoot(target), 'node_modules', '@dataiku', `uv-darwin-${arch}`, 'bin', 'uv',
-      ))
-      for (const path of files) {
-        mkdirSync(join(path, '..'), { recursive: true })
-        writeFileSync(path, 'uv fixture')
-        chmodSync(path, 0o644)
-      }
-      const read = (path: string): Buffer => Buffer.from(path.endsWith('package.json') ? '{"version":"1.0.0"}' : 'same AA')
-      expect(() => verifyPackagedAgentsAnywhere(target, read, read)).toThrow()
-      for (const path of files) chmodSync(path, 0o755)
-      expect(() => verifyPackagedAgentsAnywhere(target, read, read)).not.toThrow()
-    } finally {
-      rmSync(root, { recursive: true, force: true })
-    }
-  })
-
-  it('rejects a stale AA version or entry copied into the installation payload', () => {
-    const installed = (path: string): Buffer => path.endsWith('package.json')
-      ? Buffer.from(JSON.stringify({ version: '0.1.0-dev.desktop.c123' }))
-      : Buffer.from('prepared AA entry')
-    expect(() => verifyPackagedAgentsAnywhere(context('/build', 'win32'), installed, installed)).not.toThrow()
-    expect(() => verifyPackagedAgentsAnywhere(context('/build', 'win32'), installed, path =>
-      path.endsWith('package.json') ? Buffer.from('{"version":"0.1.0-old"}') : installed(path),
-    )).toThrow('Packaged AA version mismatch')
-    expect(() => verifyPackagedAgentsAnywhere(context('/build', 'win32'), installed, path =>
-      path.endsWith('lib/index.js') ? Buffer.from('stale AA entry') : installed(path),
-    )).toThrow('Packaged AA entry differs')
+    expect(calls).toEqual(['static', 'report'])
   })
 
   it('tracks ripgrep and the ConPTY native surface required on Windows', () => {
@@ -530,15 +490,6 @@ describe('packaged desktop runtime verification', () => {
       )).toThrow(`mirrors ordinary archived modules: ${forbidden}`)
     },
   )
-
-  it('unpacks AA Python sources while keeping its JavaScript runtime archived', () => {
-    const source = 'node_modules/@agents-anywhere/dsh-bridge-next/lib/bundled-connector/connector/cli.py'
-    expect(() => verifySelectiveUnpackedRuntime(asarIndex([source]), '/build/resources/app.asar.unpacked',
-      [{ path: source, bytes: 100 }])).not.toThrow()
-    const host = 'node_modules/@agents-anywhere/dsh-bridge-next/lib/index.js'
-    expect(() => verifySelectiveUnpackedRuntime(asarIndex([host]), '/build/resources/app.asar.unpacked',
-      [{ path: host, bytes: 100 }])).toThrow('non-allowlisted package roots')
-  })
 
   it('rejects a new smart-unpacked package until its native root is reviewed', () => {
     const path = 'node_modules/unexpected-native/binding.node'

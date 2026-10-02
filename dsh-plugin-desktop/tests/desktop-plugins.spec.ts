@@ -142,7 +142,7 @@ describe('desktop direct bundle management', () => {
     )
     expect(desktopPluginBundleMutable('dsh-plugin-desktop')).toBe(false)
     expect(desktopPluginBundleMutable('dsh-plugin-desktop-beta')).toBe(false)
-    expect(desktopPluginBundleMutable('dsh-community-market')).toBe(false)
+    expect(desktopPluginBundleMutable('dsh-community-market')).toBe(true)
     expect(desktopPluginBundleMutable('../third-party-plugin')).toBe(false)
     expect(desktopPluginBundleMutable('Third-Party-Plugin')).toBe(false)
     await harness.dispose()
@@ -342,11 +342,7 @@ describe('desktop direct bundle management', () => {
     const preview = harness.service.previewDisable(target.bundleId)
     await harness.service.executeDisable(preview.previewId)
 
-    const prepared = prepareDesktopProfile(undefined, options.homeDir, 'darwin', 'desktop', options.statePath, {
-      requested: 'community-market',
-      effective: 'community-market',
-      legacyDefaulted: false,
-    })
+    const prepared = prepareDesktopProfile(undefined, options.homeDir, 'darwin', 'desktop', options.statePath)
     const inserted = prepared.patches.flatMap(patch => Array.isArray(patch.insert) ? patch.insert : [])
     expect(inserted.filter(row => row.id === 'external-marker')).toHaveLength(0)
 
@@ -523,7 +519,6 @@ describe('desktop direct bundle management', () => {
       'darwin',
       'desktop',
       options.statePath,
-      { requested: 'community-market', effective: 'community-market', legacyDefaulted: false },
     )).not.toThrow()
     await harness.dispose()
   })

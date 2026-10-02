@@ -17,7 +17,6 @@ const input: DesktopSetupWizardInput = {
   windowsMaterial: 'off',
   openBrowser: false,
   networkExposure: 'loopback',
-  market: 'disabled',
   notifications: {
     enabled: true,
     notifyOnTurnCompletion: true,

@@ -7,7 +7,7 @@ import type { DesktopSettingsForm } from './settings-bridge.ts'
 import { Check, Copy } from 'lucide-react'
 import type { InjectFace, PropsLocale, PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots'
 import type {
-  DesktopMarketProvider, DesktopProfileView, DesktopSettingsApi, DesktopSettingsView,
+  DesktopProfileView, DesktopSettingsApi, DesktopSettingsView,
 } from './desktop-settings-api.ts'
 import type { DesktopSettingsLocaleKey } from './desktop-settings-locales.ts'
 import type { DesktopClientPlatform } from './environment.ts'
@@ -55,7 +55,6 @@ export interface DesktopSettingsSectionInjected {
     readonly pluginSelectors?: boolean
     readonly windowModes?: boolean
     readonly featuresReadOnly?: boolean
-    readonly markets?: readonly DesktopMarketProvider[]
     readonly materialRequiresRestart?: boolean
     readonly nativeLanConfirmation?: boolean
     readonly jobNotifications?: boolean
@@ -73,7 +72,7 @@ export type DesktopSettingsSectionProps =
   & InjectFace<DesktopSettingsSectionInjected>
 
 type Translate = DesktopSettingsSectionProps['t']
-type BusyOperation = 'load' | 'create-profile' | 'select-profile' | 'delete-profile' | 'select-aa' | 'select-market' | 'mode' | 'material' | 'web' | 'notification'
+type BusyOperation = 'load' | 'create-profile' | 'select-profile' | 'delete-profile' | 'mode' | 'material' | 'web' | 'notification'
 type RestartState = 'none' | 'restarting' | 'required'
 type LanPollWait = (signal: AbortSignal) => Promise<void>
 
@@ -230,20 +229,6 @@ export function Choice({
   )
 }
 
-function RepositoryLink({ href, children }: { href: string; children: ReactNode }) {
-  return (
-    <a
-      className="dshDesktopSettingsChoiceLink"
-      href={href}
-      target="_blank"
-      rel="noopener noreferrer"
-      onClick={event => { event.stopPropagation() }}
-    >
-      {children}
-    </a>
-  )
-}
-
 export function DesktopSettingsToggleRow({
   label,
   badge,
@@ -282,40 +267,6 @@ export function DesktopSettingsToggleRow({
 function profileState(profile: DesktopProfileView, t: Translate): string {
   if (!profile.exists || !profile.webCapable || !profile.selectable) return t('profileUnavailable')
   return t('profileReady')
-}
-
-export const MARKET_OPTIONS: readonly {
-  id: DesktopMarketProvider
-  title: DesktopSettingsLocaleKey
-  body: DesktopSettingsLocaleKey
-}[] = [
-  { id: 'disabled', title: 'marketDisabled', body: 'marketDisabledBody' },
-  { id: 'community-market', title: 'communityMarket', body: 'communityMarketBody' },
-  { id: 'dsh-market', title: 'dshMarket', body: 'dshMarketBody' },
-]
-
-const COMMUNITY_MARKET_URL = 'https://github.com/anywhere-labs/deepseek-harness-desktop/tree/master/dsh-community-market'
-const DSH_MARKET_URL = 'https://github.com/dsh-market/dsh-market'
-const AWESOME_DSH_PLUGIN_URL = 'https://github.com/awesome-dsh-plugin/awesome-dsh-plugin'
-
-export function marketTitle(option: (typeof MARKET_OPTIONS)[number], t: Translate): ReactNode {
-  if (option.id === 'community-market') {
-    return <RepositoryLink href={COMMUNITY_MARKET_URL}>{t(option.title)}</RepositoryLink>
-  }
-  if (option.id === 'dsh-market') {
-    return <RepositoryLink href={DSH_MARKET_URL}>{t(option.title)}</RepositoryLink>
-  }
-  return t(option.title)
-}
-
-export function marketBody(option: (typeof MARKET_OPTIONS)[number], t: Translate): ReactNode {
-  if (option.id !== 'dsh-market') return t(option.body)
-  return (
-    <>
-      {t(option.body)}{' '}
-      <RepositoryLink href={AWESOME_DSH_PLUGIN_URL}>awesome-dsh-plugin</RepositoryLink>
-    </>
-  )
 }
 
 function DesktopBrowserUrl({ url, api, t, onOpen }: {
@@ -373,7 +324,6 @@ export function DesktopSettingsSection({
   const [busy, setBusy] = useState<BusyOperation | undefined>('load')
   const [loadFailed, setLoadFailed] = useState(false)
   const [operationFailed, setOperationFailed] = useState(false)
-  const [aaStatus, setAaStatus] = useState<'idle' | 'saving' | 'failed' | 'saved'>('idle')
   const [restart, setRestart] = useState<RestartState>('none')
   const [pendingProfileDelete, setPendingProfileDelete] = useState<string>()
   const [confirmLan, setConfirmLan] = useState(false)
@@ -415,7 +365,6 @@ export function DesktopSettingsSection({
   const run = useCallback(async (operation: BusyOperation, invoke: () => Promise<void>) => {
     setBusy(operation)
     setOperationFailed(false)
-    if (operation !== 'select-aa') setAaStatus('idle')
     try {
       await invoke()
     } catch {
@@ -469,37 +418,6 @@ export function DesktopSettingsSection({
     void run('delete-profile', async () => {
       setView(await api.deleteProfile(name))
       setPendingProfileDelete(undefined)
-    })
-  }
-
-  const selectAa = (enabled: boolean): void => {
-    setAaStatus('saving')
-    void run('select-aa', async () => {
-      try {
-        if (!api.selectAa) throw new Error('AA selection is unavailable')
-        const response = await api.selectAa(enabled)
-        setView(current => current === undefined ? current : {
-          ...current, aa: { requested: enabled, effective: current.aa?.effective ?? false },
-        })
-        setAaStatus('saved')
-        if (response.restartRequired) requestRestart()
-        else setView(await refreshView())
-      } catch (cause) {
-        setAaStatus('failed')
-        throw cause
-      }
-    })
-  }
-
-  const selectMarket = (provider: DesktopMarketProvider): void => {
-    void run('select-market', async () => {
-      const response = await api.selectMarket(provider)
-      setView(current => current === undefined ? current : {
-        ...current,
-        market: { requested: provider, effective: current.market.effective, legacyDefaulted: false },
-      })
-      if (response.restartRequired) requestRestart()
-      else setView(await refreshView())
     })
   }
 
@@ -572,7 +490,7 @@ export function DesktopSettingsSection({
       </header>
 
       {introNotice}
-      {operationFailed && aaStatus !== 'failed' && <p className="dshDesktopSettingsError" role="alert">{t('operationFailed')}</p>}
+      {operationFailed && <p className="dshDesktopSettingsError" role="alert">{t('operationFailed')}</p>}
       {restart !== 'none' && (
         <p className="dshDesktopSettingsSuccess" role="status">
           {t(restart === 'restarting' ? 'restarting' : 'restartRequired')}
@@ -670,68 +588,6 @@ export function DesktopSettingsSection({
           </>
         )}
       </section>
-
-      {capabilities?.pluginSelectors !== false && <>
-      <section className="dshDesktopSettingsGroup" aria-labelledby="dsh-desktop-market-title">
-        <div>
-          <h3 id="dsh-desktop-market-title">{t('marketTitle')}</h3>
-          <p className="dshDesktopSettingsGroupIntro">{t('marketIntro')}</p>
-        </div>
-        {view?.market.legacyDefaulted === true && <p className="dshDesktopSettingsNotice">{t('legacyMarketNotice')}</p>}
-        {view !== undefined && view.market.requested !== view.market.effective && restart === 'none' && (
-          <p className="dshDesktopSettingsNotice" role="status">{t('marketLoadFailed')}</p>
-        )}
-        {view !== undefined && (
-          <div className="dshDesktopSettingsList" role="radiogroup" aria-labelledby="dsh-desktop-market-title">
-            {MARKET_OPTIONS.filter(option => capabilities?.markets === undefined || capabilities.markets.includes(option.id)).map(option => (
-              <Choice
-                key={option.id}
-                title={marketTitle(option, t)}
-                badge={option.id === 'community-market' ? t('beta') : undefined}
-                body={marketBody(option, t)}
-                selected={view.market.requested === option.id}
-                reselectable={view.market.requested === option.id && view.market.requested !== view.market.effective}
-                disabled={capabilities?.featuresReadOnly === true || busy !== undefined || restart !== 'none'}
-                action={() => { selectMarket(option.id) }}
-                status={view.market.requested === option.id && view.market.requested !== view.market.effective
-                    ? t('retryMarket')
-                    : view.market.requested === option.id ? t('selected') : undefined}
-              />
-            ))}
-          </div>
-        )}
-      </section>
-
-      <section className="dshDesktopSettingsGroup" aria-labelledby="dsh-desktop-aa-title">
-        <div>
-          <h3 id="dsh-desktop-aa-title">{t('aaTitle')}</h3>
-          <p className="dshDesktopSettingsGroupIntro">{t('aaIntro')}</p>
-        </div>
-        {view?.aa?.requested === true && !view.aa.effective && restart === 'none' && (
-          <p className="dshDesktopSettingsNotice" role="status">{t('aaLoadFailed')}</p>
-        )}
-        {aaStatus === 'saving' && <p className="dshDesktopSettingsNotice" role="status">{t('aaSaving')}</p>}
-        {aaStatus === 'failed' && <p className="dshDesktopSettingsError" role="alert">{t('aaSaveFailed')}</p>}
-        {aaStatus === 'saved' && <p className="dshDesktopSettingsSuccess" role="status">
-          {t(restart === 'restarting' ? 'restarting' : restart === 'required' ? 'restartRequired' : 'aaSaved')}
-        </p>}
-        {view !== undefined && <div className="dshDesktopSettingsList" role="radiogroup" aria-labelledby="dsh-desktop-aa-title">
-          {[false, true].map(enabled => <Choice
-            key={String(enabled)}
-            title={t(enabled ? 'aaEnabled' : 'aaDisabled')}
-            badge={enabled ? t('beta') : undefined}
-            body={t(enabled ? 'aaEnabledBody' : 'aaDisabledBody')}
-            selected={(view.aa?.requested ?? false) === enabled}
-            reselectable={enabled && view.aa?.requested === true && !view.aa.effective}
-            disabled={capabilities?.featuresReadOnly === true || busy !== undefined || restart !== 'none'}
-            action={() => { selectAa(enabled) }}
-            status={enabled && view.aa?.requested === true && !view.aa.effective
-              ? t('retryAa') : (view.aa?.requested ?? false) === enabled ? t('selected') : undefined}
-          />)}
-        </div>}
-      </section>
-
-      </>}
 
       {/* Window modes, or macOS's material choice; with neither the group would be empty. */}
       {(capabilities?.windowModes !== false || platform === 'darwin') && <section className="dshDesktopSettingsGroup" aria-labelledby="dsh-desktop-presentation-title">

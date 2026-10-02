@@ -9,7 +9,6 @@ import {
   shell,
 } from 'electron'
 import { spawn } from 'node:child_process'
-import { RemoteControlOffer, remoteControlOfferCopy } from './remote-control-offer.ts'
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { Readable } from 'node:stream'
@@ -312,16 +311,6 @@ export class ElectronDesktopRuntime implements DesktopRuntime {
     }
     if (this.mountTask === undefined) {
       this.setLocalePreference(spec.readLocalePreference())
-      const remoteOffer = spec.readRemoteControl && spec.enableRemoteControl ? new RemoteControlOffer({
-        path: join(app.getPath('userData'), 'remote-control-offer-seen'),
-        readEnabled: spec.readRemoteControl,
-        enable: spec.enableRemoteControl,
-        confirm: async copy => (await this.showDesktopMessageBox({
-          type: 'question', title: copy.title, message: copy.message, detail: copy.detail,
-          buttons: [copy.confirm, copy.cancel], defaultId: 1, cancelId: 1, noLink: true,
-        })).response === 0,
-        reportError: cause => this.logError(`Remote control notice: ${String(cause)}`),
-      }) : undefined
       const generation = new ElectronShellGeneration({
         platform: this.platformStrategy,
         spec,
@@ -340,17 +329,6 @@ export class ElectronDesktopRuntime implements DesktopRuntime {
         platformLoginTitle: () => PLATFORM_LOGIN_TITLE[this.currentLocale],
         setupOnboarding: this.setupOnboarding,
         chromeActions: {
-          ...(remoteOffer ? { remoteControl: {
-            read: () => remoteOffer.read(),
-            open: async () => {
-              try { await remoteOffer.open(this.locale) }
-              catch (cause) {
-                this.logError(`Remote control activation failed: ${String(cause)}`)
-                const copy = remoteControlOfferCopy[this.locale]
-                await this.showDesktopMessageBox({ type: 'error', title: copy.failed, message: copy.failed, detail: copy.retry })
-              }
-            },
-          } } : {}),
           locale: () => this.locale,
           version: PRODUCT_VERSION,
           openTerminal: () => { this.openTerminal() },

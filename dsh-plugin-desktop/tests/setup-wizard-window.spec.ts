@@ -62,8 +62,6 @@ function input(overrides: Partial<DesktopSetupWizardInput> = {}): DesktopSetupWi
     windowsMaterial: 'off',
     openBrowser: true,
     networkExposure: 'loopback',
-    aaEnabled: false,
-  market: 'community-market',
     notifications,
     ...overrides,
   }
@@ -76,8 +74,6 @@ function completeUrl(selection: DesktopSetupWizardSelection = input()): string {
   url.searchParams.set('windowsMaterial', selection.windowsMaterial)
   url.searchParams.set('openBrowser', String(selection.openBrowser))
   url.searchParams.set('networkExposure', selection.networkExposure)
-  url.searchParams.set('market', selection.market)
-  url.searchParams.set('aaEnabled', String(selection.aaEnabled === true))
   url.searchParams.set('notificationsEnabled', String(selection.notifications.enabled))
   url.searchParams.set('notifyOnTurnCompletion', String(selection.notifications.notifyOnTurnCompletion))
   url.searchParams.set('notifyOnTurnFailure', String(selection.notifications.notifyOnTurnFailure))
@@ -105,8 +101,6 @@ describe('Desktop Setup Wizard action parser', () => {
         windowsMaterial: 'off',
         openBrowser: true,
         networkExposure: 'loopback',
-        aaEnabled: false,
-  market: 'community-market',
         notifications,
       },
     })
@@ -117,7 +111,7 @@ describe('Desktop Setup Wizard action parser', () => {
 
   it('rejects partial, duplicate, extra, malformed, and oversized payloads', () => {
     const partial = new URL(completeUrl())
-    partial.searchParams.delete('market')
+    partial.searchParams.delete('networkExposure')
     expect(parseDesktopSetupWizardAction(partial.href)).toBeUndefined()
     const duplicate = new URL(completeUrl())
     duplicate.searchParams.append('mode', 'advanced')
@@ -205,8 +199,6 @@ describe('DesktopSetupWizardWindow', () => {
       windowsMaterial: source.windowsMaterial,
       openBrowser: source.openBrowser,
       networkExposure: source.networkExposure,
-      aaEnabled: false,
-      market: source.market,
       notifications: source.notifications,
     }
     const result = new DesktopSetupWizardWindow({ locale: 'en', input: input() }).run()

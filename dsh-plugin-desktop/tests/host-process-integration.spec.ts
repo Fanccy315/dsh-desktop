@@ -12,7 +12,7 @@ import { HostRpc } from '../src/host-rpc.ts'
 import { bindNativeRuntime, runtimeSnapshot } from '../src/host-runtime-bridge.ts'
 import type { DesktopRuntime, DesktopShellSpec } from '../src/runtime.ts'
 
-it.each([false, true])('boots a separate Web Host with client plugins (AA enabled: %s)', async aaEnabled => {
+it('boots a separate Web Host with client plugins', async () => {
   const home = mkdtempSync(join(tmpdir(), 'dsh-isolated-host-'))
   const token = Buffer.alloc(32, 7).toString('base64url')
   let child: ReturnType<typeof fork> | undefined
@@ -22,9 +22,8 @@ it.each([false, true])('boots a separate Web Host with client plugins (AA enable
   let stderr = ''
   try {
     writeFileSync(join(home, 'settings.yaml'), 'dsh-desktop:\n  mode: advanced\nagent-presets:\n  default: minimal\n')
-    const prepared = prepareDesktopProfile('1', home, 'win32', undefined, undefined, undefined, { aaEnabled })
+    const prepared = prepareDesktopProfile('1', home, 'win32')
     prepared.overlays = []
-    if (aaEnabled) prepared.overlays.push({ id: 'agents-anywhere-bridge-next', config: { dshHome: home, stateRoot: join(home, 'aa-state') } })
     prepared.port = 0
     const plugin = join(prepared.profile.dir, 'node_modules', 'isolated-client-fixture')
     mkdirSync(plugin, { recursive: true })
@@ -68,9 +67,9 @@ it.each([false, true])('boots a separate Web Host with client plugins (AA enable
     releaseNative = bindNativeRuntime(rpc, runtime)
     rpc.handle('certificate', () => ({ failureCode: 'test-disabled' }))
     rpc.handle('quit', () => {})
-    const result = await rpc.call<{ pid: number; services: { aaRuntime: boolean; aaOnboarding: boolean } }>('boot', [{
+    const result = await rpc.call<{ pid: number }>('boot', [{
       prepared, profilePreferences: { mode: 'advanced', openBrowser: false, networkExposure: 'loopback',
-        macosMaterial: 'auto', windowsMaterial: 'auto', market: 'disabled', notifications: { enabled: false }, aaEnabled },
+        macosMaterial: 'auto', windowsMaterial: 'auto', notifications: { enabled: false } },
       homeDir: home, activeProfileName: prepared.profile.name, pluginManagementStatePath: join(home, 'plugins.json'),
       selectionStatePath: join(home, 'selection.json'), marketUserDataDir: join(home, 'userdata'),
       releaseUserDataLocations: desktopReleaseUserDataLocations(home, join(home, 'userdata')),
@@ -108,8 +107,6 @@ it.each([false, true])('boots a separate Web Host with client plugins (AA enable
     expect(bundle.status).toBe(200)
     expect(await bundle.text()).toContain('isolatedClientFixture')
     expect(html).toContain('dsh-plugin-desktop')
-    await expect.poll(async () => (await rpc!.call<{ services: { aaRuntime: boolean; aaOnboarding: boolean } }>('status')).services, { timeout: 3000 })
-      .toEqual({ aaRuntime: aaEnabled, aaOnboarding: aaEnabled })
     // A settings import is an ordinary restart; recovery is reserved for a Host that
     // failed to compose, and this one did not.
     expect(restarts).not.toContain('recovery')

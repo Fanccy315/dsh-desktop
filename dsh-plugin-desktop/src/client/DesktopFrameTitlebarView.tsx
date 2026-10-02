@@ -19,7 +19,6 @@ export interface DesktopFrameTitlebarInjected {
     DesktopSettingsApi,
     'openTerminal' | 'restart' | 'restartToRecovery' | 'reloadRenderer' | 'toggleDeveloperTools' | 'checkForUpdates'
   >
-  readonly remoteControl?: { readonly seen: boolean; open(): Promise<void> }
   readonly setMode: (mode: DesktopClientMode) => Promise<void>
 }
 
@@ -107,7 +106,6 @@ export function DesktopModeControl({
   t,
 }: {
   readonly mode: DesktopClientMode
-  readonly remoteControl?: { readonly seen: boolean; open(): Promise<void> }
   readonly setMode: (mode: DesktopClientMode) => Promise<void>
   readonly restart: () => Promise<void>
   readonly t: (key: DesktopSettingsLocaleKey) => string
@@ -163,7 +161,7 @@ export function DesktopModeControl({
 }
 
 /** Horizontal frame surface; the unrelated upstream content starts below it. */
-export function DesktopFrameTitlebarView({ api, environment, setMode, t, remoteControl }: DesktopFrameTitlebarInjected & {
+export function DesktopFrameTitlebarView({ api, environment, setMode, t }: DesktopFrameTitlebarInjected & {
   readonly t: (key: DesktopSettingsLocaleKey) => string
 }) {
   return (
@@ -185,9 +183,6 @@ export function DesktopFrameTitlebarView({ api, environment, setMode, t, remoteC
         />
       </div>
       <div className="dshDesktopFrameActions">
-        {remoteControl && <button type="button" className="dshDesktopFrameMode dshDesktopRemoteControl" onClick={() => { void remoteControl.open().catch(() => {}) }}>
-          {t('remoteControl')}{!remoteControl.seen && <span className="dshDesktopRemoteControlDot" aria-label={t('remoteControlNew')} />}
-        </button>}
         <DesktopNativeActions api={api} t={t} placement="titlebar" />
       </div>
     </header>

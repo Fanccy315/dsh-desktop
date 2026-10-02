@@ -250,23 +250,3 @@ describe('isolated compatibility shell', () => {
     expect(() => handler(event(), 'terminal')).toThrow('untrusted')
   })
 })
-
-
-it('exposes the remote-control offer only to trusted chrome and clears the dot on click', async () => {
-  const { shell, actions, handler, event } = fixture()
-  let seen = false
-  let finish!: () => void
-  actions.remoteControl = {
-    read: async () => ({ enabled: false, seen }),
-    open: vi.fn(() => { seen = true; return new Promise<void>(resolve => { finish = resolve }) }),
-  }
-  await shell.load()
-  expect(handler(event(), 'state')).toMatchObject({ remoteControl: { enabled: false, seen: false } })
-  expect(() => handler({ ...event(), sender: electron.content }, 'remote-control')).toThrow('untrusted')
-  const pending = handler(event(), 'remote-control')
-  expect(handler(event(), 'state')).toMatchObject({ remoteControl: { seen: true } })
-  expect(actions.remoteControl.open).toHaveBeenCalledTimes(1)
-  finish()
-  await pending
-  shell.dispose()
-})

@@ -113,13 +113,6 @@ export function applyDesktopSettings(
     inject: () => ({ api }),
   }, DesktopTerminalSettingsAction))
 
-  // The launcher owns Market selection through Desktop settings. Its bundle
-  // remains active, but must not expose a second switch in the plugin list.
-  ctx.slots.inject('plugins.bundle.hidden', () => ctx.slots.register({
-    name: 'plugins.bundle.hidden',
-    key: 'dshmarket',
-  }, () => null))
-
   return Object.freeze({
     api,
     setMode,

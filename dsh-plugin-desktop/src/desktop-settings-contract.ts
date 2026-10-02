@@ -1,7 +1,5 @@
 /** Private same-origin Desktop settings API shared with the bundled renderer. */
 
-import type { DesktopMarketProvider } from './desktop-market.ts'
-
 /** Read the current Desktop-owned settings state. */
 export const DESKTOP_SETTINGS_PATH = '/api/desktop/settings'
 
@@ -13,11 +11,6 @@ export const DESKTOP_PROFILE_SELECT_PATH = '/api/desktop/profiles/select'
 
 /** Delete one inactive, user-created Web Profile. */
 export const DESKTOP_PROFILE_DELETE_PATH = '/api/desktop/profiles/delete'
-
-/** Persist the Market provider selected for the next Desktop generation. */
-export const DESKTOP_AA_SELECT_PATH = '/api/desktop/aa/select'
-
-export const DESKTOP_MARKET_SELECT_PATH = '/api/desktop/market/select'
 
 /** Open the launcher-owned DSH terminal without accepting command text. */
 export const DESKTOP_TERMINAL_OPEN_PATH = '/api/desktop/terminal/open'
@@ -54,16 +47,6 @@ export interface DesktopSettingsProfileView {
   readonly deletable: boolean
 }
 
-/** Requested and generation-effective Market provider state. */
-export interface DesktopSettingsMarketView {
-  /** Explicit or fail-safe provider requested on disk. */
-  readonly requested: DesktopMarketProvider
-  /** Provider composed into the currently running generation. */
-  readonly effective: DesktopMarketProvider
-  /** Whether an absent or invalid legacy state produced the fail-safe default. */
-  readonly legacyDefaulted: boolean
-}
-
 /** Marker-free ordinary-browser URLs for the running Web generation. */
 export interface DesktopSettingsWebView {
   /** Always-available loopback URL using the actual listening port. */
@@ -86,9 +69,6 @@ export interface DesktopSettingsResponse {
   readonly current: string
   /** Fresh profile discovery without filesystem paths or manifest details. */
   readonly profiles: readonly DesktopSettingsProfileView[]
-  /** Market choice for the current and next generation. */
-  readonly aa: { readonly requested: boolean; readonly effective: boolean }
-  readonly market: DesktopSettingsMarketView
   /** Actual browser URLs for the current WebServer generation. */
   readonly web: DesktopSettingsWebView
 }
@@ -122,14 +102,6 @@ export interface DesktopProfileDeleteRequest {
 
 /** Successful deletion returns a fresh state without the removed profile. */
 export type DesktopProfileDeleteResponse = DesktopSettingsResponse
-
-/** Exact body accepted by the Market-provider endpoint. */
-export interface DesktopMarketSelectRequest {
-  readonly provider: DesktopMarketProvider
-}
-
-/** Successful Market selection handoff. */
-export type DesktopMarketSelectResponse = DesktopRestartAcceptance
 
 /** Exact empty body accepted by the terminal endpoint. */
 export type DesktopTerminalOpenRequest = Readonly<Record<string, never>>

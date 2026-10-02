@@ -59,8 +59,6 @@ describe('Desktop Safe Mode environment', () => {
 
   it('uses fixed non-interactive defaults for the disposable Profile', () => {
     expect(DESKTOP_SAFE_MODE_DEFAULTS).toEqual({
-      aaEnabled: false,
-      market: 'disabled',
       settings: {
         mode: 'compatibility',
         macosMaterial: 'off',

@@ -51,14 +51,12 @@ const BROWSER_AUTH_TOKEN = 'AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA'
 const CA_FINGERPRINT = 'a'.repeat(64)
 
 const VIEW: DesktopSettingsView = {
-  aa: { requested: false, effective: false },
   current: 'desktop',
   profiles: [
     { name: 'desktop', exists: true, webCapable: true, selectable: true, deletable: false },
     { name: 'headless', exists: true, webCapable: false, selectable: false, deletable: false },
     { name: 'work', exists: true, webCapable: true, selectable: true, deletable: true },
   ],
-  market: { requested: 'disabled', effective: 'disabled', legacyDefaulted: true },
   web: {
     localUrl: `http://127.0.0.1:43120/?token=${BROWSER_AUTH_TOKEN}`,
     lanUrls: [],
@@ -81,8 +79,6 @@ describe('Desktop settings API', () => {
     expect(parseDesktopSettingsView(VIEW)).toEqual(VIEW)
     expect(() => parseDesktopSettingsView({ ...VIEW, profiles: [...VIEW.profiles, VIEW.profiles[0]] }))
       .toThrow('duplicate profile')
-    expect(() => parseDesktopSettingsView({ ...VIEW, market: { ...VIEW.market, requested: 'unknown' } }))
-      .toThrow('invalid Desktop settings response')
     expect(() => parseDesktopSettingsView({ ...VIEW, web: { ...VIEW.web, localUrl: 'https://example.com/' } }))
       .toThrow('invalid browser URL')
     expect(parseDesktopRestartAcceptance({ accepted: true, restartRequired: true }))
@@ -385,7 +381,6 @@ describe('Desktop settings API', () => {
     await expect(api.createProfile('work')).resolves.toEqual(VIEW)
     await expect(api.selectProfile('work')).resolves.toEqual({ accepted: true, restartRequired: true })
     await expect(api.deleteProfile('work')).resolves.toEqual(VIEW)
-    await expect(api.selectMarket('community-market')).resolves.toEqual({ accepted: true, restartRequired: true })
     await expect(api.openTerminal()).resolves.toBeUndefined()
     await expect(api.restart()).resolves.toBeUndefined()
     await expect(api.restartToRecovery()).resolves.toBeUndefined()
@@ -399,7 +394,6 @@ describe('Desktop settings API', () => {
       desktopSettingsPaths.profileCreate,
       desktopSettingsPaths.profileSelect,
       desktopSettingsPaths.profileDelete,
-      desktopSettingsPaths.marketSelect,
       desktopSettingsPaths.terminalOpen,
       desktopSettingsPaths.restart,
       desktopSettingsPaths.recoveryRestart,
@@ -418,7 +412,8 @@ describe('Desktop settings API', () => {
       body: JSON.stringify({ name: 'work' }),
     })
     expect(fetcher.mock.calls[4]?.[1]).toMatchObject({
-      body: JSON.stringify({ provider: 'community-market' }),
+      method: 'POST',
+      body: JSON.stringify({}),
     })
     expect(fetcher.mock.calls[5]?.[1]).toMatchObject({
       method: 'POST',
@@ -437,10 +432,6 @@ describe('Desktop settings API', () => {
       body: JSON.stringify({}),
     })
     expect(fetcher.mock.calls[9]?.[1]).toMatchObject({
-      method: 'POST',
-      body: JSON.stringify({}),
-    })
-    expect(fetcher.mock.calls[10]?.[1]).toMatchObject({
       method: 'POST',
       body: JSON.stringify({}),
     })
@@ -658,7 +649,7 @@ describe('Desktop native action presentation', () => {
 })
 
 describe('Desktop settings Slot registration', () => {
-  it.each(['darwin', 'win32'] as const)('registers Desktop controls and hides the launcher-owned Market on %s', async platform => {
+  it.each(['darwin', 'win32'] as const)('registers Desktop controls on %s', async platform => {
     const scope = {
       getSnapshot: () => ({
         status: 'loading' as const,
@@ -729,11 +720,6 @@ describe('Desktop settings Slot registration', () => {
     })
     expect(actionOptions.inject()).toHaveProperty('api')
     expect(actionComponent).toBe(DesktopTerminalSettingsAction)
-    expect(inject).toHaveBeenCalledWith('plugins.bundle.hidden', expect.any(Function))
-    expect(register).toHaveBeenNthCalledWith(3, {
-      name: 'plugins.bundle.hidden',
-      key: 'dshmarket',
-    }, expect.any(Function))
     await control.setMode('extended')
     expect(scope.set).toHaveBeenCalledWith('mode', 'extended')
   })

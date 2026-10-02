@@ -101,13 +101,6 @@ import { createDesktopProfileBoot } from './profile-context.ts'
 import { logInactiveStartupEntries } from './startup-audit.ts'
 import { DesktopActionsService } from './desktop-actions.ts'
 import { clearDesktopProfilePluginState, DesktopPluginsService } from './desktop-plugins.ts'
-import {
-  desktopMarketSnapshotWithEffective,
-  readDesktopMarketStateForUserData,
-  selectDesktopMarketProvider,
-  type DesktopMarketProvider,
-  type DesktopMarketSnapshot,
-} from './desktop-market.ts'
 import DesktopSettingsController from './desktop-settings-controller.ts'
 import {
   resolveDesktopDataDirectory,
@@ -122,7 +115,7 @@ import {
   readDesktopProfilePreferences,
   writeDesktopProfilePreferences,
   type DesktopProfilePreferences,
-  type DesktopProfilePreferencesStateV1,
+  type DesktopProfilePreferencesStateV2,
 } from './profile-preferences.ts'
 import {
   DesktopStartupRecoveryController,
@@ -435,15 +428,6 @@ function notifyDesktopSafeModeActive(
   } catch (cause) {
     logger.error(`${BIN_NAME}: failed to show Safe Mode notification: ${cause instanceof Error ? cause.message : String(cause)}`)
   }
-}
-
-/** Use one Profile-owned Market request as the first composition input. */
-function desktopProfileMarketSnapshot(market: DesktopMarketProvider): DesktopMarketSnapshot {
-  return Object.freeze({
-    requested: market,
-    effective: market,
-    legacyDefaulted: false,
-  })
 }
 
 /**
@@ -1292,13 +1276,8 @@ async function start(): Promise<void> {
     startupStage = 'profile-composition'
     lifecycleRecorder.transitionStartupStage(startupStage)
     const lanAddresses = desktopLanAddresses()
-    const legacyMarketSelection = readDesktopMarketStateForUserData(marketUserDataDir)
     let profilePreferences = readDesktopProfilePreferences(marketUserDataDir, activeProfileDir)
-    let marketSelection = profilePreferences === undefined
-      ? legacyMarketSelection
-      : desktopProfileMarketSnapshot(profilePreferences.market)
     const preparationHooks = {
-      get aaEnabled() { return safeModePaths === undefined && profilePreferences?.aaEnabled === true },
       lanAddresses,
       onSettingsDocumentResolved: (settingsDocument: string) => {
         if (startupRecoveryConfigurationPaths === undefined) return
@@ -1315,7 +1294,6 @@ async function start(): Promise<void> {
       process.platform,
       activeProfileName,
       pluginManagementStatePath,
-      marketSelection,
       preparationHooks,
     )
     let legacyPresetMigrated = false
@@ -1338,23 +1316,18 @@ async function start(): Promise<void> {
         process.platform,
         activeProfileName,
         pluginManagementStatePath,
-        marketSelection,
         preparationHooks,
       )
     }
     if (safeModePaths !== undefined) {
       const safeModeDefaults = DESKTOP_SAFE_MODE_DEFAULTS
       await updateDesktopSetupWizardSettings(prepared.settingsDocument, safeModeDefaults.settings)
-      await selectDesktopMarketProvider(marketUserDataDir, safeModeDefaults.market)
-      marketSelection = readDesktopMarketStateForUserData(marketUserDataDir)
       profilePreferences = await writeDesktopProfilePreferences(
         marketUserDataDir,
         prepared.profile.dir,
         desktopProfilePreferencesFromSettings(
           safeModeDefaults.settings,
           safeModeDefaults.settings.notifications,
-          safeModeDefaults.market,
-          safeModeDefaults.aaEnabled,
         ),
       )
       prepared = prepareDesktopProfile(
@@ -1363,7 +1336,6 @@ async function start(): Promise<void> {
         process.platform,
         activeProfileName,
         pluginManagementStatePath,
-        marketSelection,
         preparationHooks,
       )
     } else if (profilePreferences === undefined) {
@@ -1386,7 +1358,6 @@ async function start(): Promise<void> {
           process.platform,
           activeProfileName,
           pluginManagementStatePath,
-          marketSelection,
           preparationHooks,
         )
       }
@@ -1397,7 +1368,6 @@ async function start(): Promise<void> {
         desktopProfilePreferencesFromSettings(
           prepared,
           importedSettings.notifications,
-          legacyMarketSelection.requested,
         ),
       )
     } else {
@@ -1413,15 +1383,12 @@ async function start(): Promise<void> {
           `${BIN_NAME}: failed to persist removed Acrylic material migration: ${cause instanceof Error ? cause.message : String(cause)}`,
         )
       }
-      await selectDesktopMarketProvider(marketUserDataDir, profilePreferences.market)
-      marketSelection = readDesktopMarketStateForUserData(marketUserDataDir)
       prepared = prepareDesktopProfile(
         process.env.DSH_TELEMETRY_DISABLED,
         homeDir,
         process.platform,
         activeProfileName,
         pluginManagementStatePath,
-        marketSelection,
         preparationHooks,
       )
     }
@@ -1435,8 +1402,7 @@ async function start(): Promise<void> {
         || !hasDesktopProfileUsageHistory(releaseUserDataLocations, prepared.profile.dir, activeProfileName))
     if (setupPending) await beginDesktopSetupWizard(marketUserDataDir, prepared.profile.dir)
     const setupInput = { ...readDesktopSetupWizardSettings(prepared.settingsDocument), appVersion,
-      profileName: activeProfileName, platform: runtime.platform,
-      market: marketSelection.requested, aaEnabled: profilePreferences?.aaEnabled === true }
+      profileName: activeProfileName, platform: runtime.platform }
     let setupSaving = false
     let setupRestartPending = false
     runtime.setupOnboarding = {
@@ -1471,8 +1437,7 @@ async function start(): Promise<void> {
         try {
           if (selection !== undefined) {
             profilePreferences = await writeDesktopProfilePreferences(marketUserDataDir, prepared.profile.dir,
-              desktopProfilePreferencesFromSettings(selection, selection.notifications, selection.market, selection.aaEnabled === true))
-            await selectDesktopMarketProvider(marketUserDataDir, selection.market)
+              desktopProfilePreferencesFromSettings(selection, selection.notifications))
             // A new Profile has no settings document left to import, so save
             // through the live settings scopes the way the mode picker does.
             await applySettings!(normalizeDesktopSetupWizardSettings({
@@ -1547,7 +1512,6 @@ async function start(): Promise<void> {
           process.platform,
           activeProfileName,
           pluginManagementStatePath,
-          marketSelection,
           preparationHooks,
         )
         if (prepared.requiresDependencyMigration) {
@@ -1559,14 +1523,6 @@ async function start(): Promise<void> {
           : migrationCause instanceof Error ? migrationCause.message : String(migrationCause)
         throw new Error(`${BIN_NAME}: Profile dependency migration failed: ${maskSecrets(detail)}`)
       }
-    }
-    if (prepared.aaFailure !== undefined) {
-      electronLogger.error(`${BIN_NAME}: requested AA bundle was disabled for this generation: ${maskSecrets(prepared.aaFailure)}`)
-    }
-    if (prepared.marketFailure !== undefined) {
-      electronLogger.error(
-        `${BIN_NAME}: requested Market provider ${prepared.market.requested} was disabled for this generation: ${prepared.marketFailure}`,
-      )
     }
     const prepareHostCertificate = async () => {
       if (prepared.lanAddresses.length === 0) return { failureCode: 'no-address' }
@@ -1638,15 +1594,12 @@ async function start(): Promise<void> {
       let profilePreferencesWriteTail: Promise<void> = Promise.resolve()
       let profilePreferencesStopping = false
       // Setup saves from the Electron process after this Host booted; follow the
-      // durable file so its Market and AA choices are neither reverted nor hidden.
+      // durable file so its choices are neither reverted nor hidden.
       const latestProfilePreferences = (): DesktopProfilePreferences =>
         readDesktopProfilePreferences(marketUserDataDir, prepared.profile.dir) ?? currentProfilePreferences
-      const readProfilePreferences = (): DesktopProfilePreferences => {
-        try { return latestProfilePreferences() } catch { return currentProfilePreferences }
-      }
       const enqueueProfilePreferencesWrite = (
         update: (current: DesktopProfilePreferences) => DesktopProfilePreferences,
-      ): Promise<DesktopProfilePreferencesStateV1> => {
+      ): Promise<DesktopProfilePreferencesStateV2> => {
         if (profilePreferencesStopping) {
           return Promise.reject(new Error(`${BIN_NAME}: Profile preferences are stopping`))
         }
@@ -1708,14 +1661,12 @@ async function start(): Promise<void> {
             openTerminal: () => { runtime.openTerminal() },
             requestRestart: () => runtime.requestRestart(),
           })
-          if (prepared.market.effective === 'community-market') {
-            await hostCtx.plugin(DesktopPluginsService, {
-              profileName: activeProfileName,
-              homeDir,
-              statePath: pluginManagementStatePath,
-              installAnchor: desktopInstallAnchor(),
-            })
-          }
+          await hostCtx.plugin(DesktopPluginsService, {
+            profileName: activeProfileName,
+            homeDir,
+            statePath: pluginManagementStatePath,
+            installAnchor: desktopInstallAnchor(),
+          })
           if (logSink !== undefined) {
             fileExporter = new FileExporter(logSink)
             hostCtx.logger.exporter(fileExporter)
@@ -1771,22 +1722,8 @@ async function start(): Promise<void> {
             if (pendingSettingsRestart !== undefined) clearImmediate(pendingSettingsRestart)
             pendingSettingsRestart = undefined
           }, 'dsh-plugin-desktop: pending Desktop settings restart')
-          const readMarket = () => desktopMarketSnapshotWithEffective(
-            desktopProfileMarketSnapshot(readProfilePreferences().market),
-            prepared.market.effective,
-          )
           hostCtx.provide('desktopSettingsController', new DesktopSettingsController({
             profiles: hostCtx.desktopProfiles,
-            readMarket,
-            readAa: () => ({ requested: readProfilePreferences().aaEnabled === true, effective: prepared.aaEnabled }),
-            selectAa: async enabled => {
-              await enqueueProfilePreferencesWrite(current => desktopProfilePreferencesFromSettings(
-                current,
-                current.notifications,
-                current.market,
-                enabled,
-              ))
-            },
             readWeb: () => {
               const lan = lanHttps.snapshot()
               const lanOrigins = lan.state === 'ready' && lan.actualPort !== null
@@ -1804,18 +1741,6 @@ async function start(): Promise<void> {
                   return new URL(DESKTOP_LAN_HTTPS_CA_PATH, origin).href
                 }),
               }
-            },
-            selectMarket: async provider => {
-              await enqueueProfilePreferencesWrite(current => desktopProfilePreferencesFromSettings(
-                current,
-                current.notifications,
-                provider,
-                current.aaEnabled === true,
-              ))
-              return desktopMarketSnapshotWithEffective(
-                await selectDesktopMarketProvider(marketUserDataDir, provider),
-                prepared.market.effective,
-              )
             },
             scheduleRestart: scheduleSettingsRestart,
             scheduleRecoveryRestart: () => {

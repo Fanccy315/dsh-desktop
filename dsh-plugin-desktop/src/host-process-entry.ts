@@ -26,8 +26,7 @@ const rpc = new HostRpc({
   },
 }, 120_000)
 let host: DesktopStartupGenerationHost | undefined
-let inspectServices = () => ({ aaRuntime: false, aaOnboarding: false })
-rpc.handle('status', () => ({ pid: process.pid, services: inspectServices() }))
+rpc.handle('status', () => ({ pid: process.pid }))
 let starting = false
 let stopping = false
 let lan: DesktopLanHttpsRuntime | undefined
@@ -69,7 +68,7 @@ rpc.handle('boot', async args => {
       addresses: options.prepared.lanAddresses, requestedPort: 0,
       prepareCertificate: () => rpc.call('certificate'),
     })
-    inspectServices = await bootDesktopHost(options, runtime, browser, lan,
+    await bootDesktopHost(options, runtime, browser, lan,
       value => { host = value }, code => { void rpc.call('quit', [code]).catch(() => {}) })
     if (stopping) { await host?.fiber.dispose(); throw new Error('DSH Host stopped during startup') }
     await runtime.mountScheduled()

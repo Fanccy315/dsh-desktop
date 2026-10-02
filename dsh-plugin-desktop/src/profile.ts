@@ -66,12 +66,6 @@ import {
   desktopPluginBundleMutable,
   readDesktopDisabledBundles,
 } from './desktop-plugins.ts'
-import {
-  DESKTOP_MARKET_IDENTITIES,
-  desktopMarketSnapshotWithEffective,
-  type DesktopMarketProvider,
-  type DesktopMarketSnapshot,
-} from './desktop-market.ts'
 import { DesktopShellConfig } from './settings-bridge.ts'
 
 /** Persistent profile managed by the desktop launcher and the ordinary dsh plugin command. */
@@ -83,12 +77,25 @@ export { DESKTOP_PACKAGE_NAME } from './product-identity.ts'
 /** Empty include root rewritten before every profile boot. */
 export const DESKTOP_PROFILE_ROOT = 'cordis.yml'
 
-const AA_PACKAGE_NAME = '@agents-anywhere/dsh-bridge-next'
-const AA_ROW_ID = 'agents-anywhere-bridge-next'
 const BIN_NAME = DESKTOP_PACKAGE_NAME
 const REQUIRED_BUNDLES = requiredWebBundles()
 const REQUIRED_BUNDLE_SET = new Set(REQUIRED_BUNDLES)
-const OBSOLETE_DESKTOP_BUNDLE_SET = new Set(['@deepseek-ai/dsh-desktop-app'])
+// Retired desktop capabilities: the community market, the bundled dshmarket
+// runtime, and the Agents Anywhere bridge. Profiles that still list them are
+// silently healed, and any Loader row they once injected is stripped.
+const OBSOLETE_DESKTOP_BUNDLE_SET = new Set([
+  '@deepseek-ai/dsh-desktop-app',
+  'dsh-community-market',
+  'dshmarket',
+  '@agents-anywhere/dsh-bridge-next',
+])
+/** Loader row ids and package names owned by the retired market/AA bundles. */
+const RETIRED_PROVIDER_ROW_IDS: ReadonlySet<string> = new Set([
+  'community-market',
+  'dsh-market',
+  'agents-anywhere-bridge-next',
+])
+const RETIRED_PROVIDER_PACKAGES: ReadonlySet<string> = OBSOLETE_DESKTOP_BUNDLE_SET
 // Electron's patched fs/module APIs read this logical ASAR path directly. The
 // Desktop resolver bridges out-of-tree Profile plugins back into this virtual
 // installation without materializing an incomplete ESM-only proxy tree.
@@ -129,19 +136,6 @@ const DESKTOP_SHELL_ENTRY_ID = 'desktop-shell'
 const UI_LAYOUT_PACKAGE = '@deepseek-ai/dsh-client-ui-layout'
 const UI_SIDEBAR_PACKAGE = '@deepseek-ai/dsh-client-ui-sidebar'
 const UI_CONVERSATION_PACKAGE = '@deepseek-ai/dsh-client-ui-conversation'
-const DEFAULT_DESKTOP_MARKET_SNAPSHOT: DesktopMarketSnapshot = Object.freeze({
-  requested: 'disabled',
-  effective: 'disabled',
-  legacyDefaulted: true,
-})
-const MARKET_ROW_IDS: ReadonlySet<string> = new Set([
-  DESKTOP_MARKET_IDENTITIES.community.rowId,
-  DESKTOP_MARKET_IDENTITIES.dshMarket.rowId,
-])
-const MARKET_PACKAGE_NAMES: ReadonlySet<string> = new Set([
-  DESKTOP_MARKET_IDENTITIES.community.packageName,
-  DESKTOP_MARKET_IDENTITIES.dshMarket.packageName,
-])
 
 /**
  * Parse desktop presentation state and reject corrupted values.
@@ -611,8 +605,6 @@ export interface PreparedDesktopProfile {
     platform: NodeJS.Platform
     profileName: string
     pluginStatePath: string | undefined
-    marketSelection: DesktopMarketSnapshot
-    aaEnabled: boolean
   }
   /** Harness home shared by the launcher and generated command environment. */
   homeDir: string
@@ -644,21 +636,12 @@ export interface PreparedDesktopProfile {
   lanAddresses: readonly string[]
   /** Resolved file-backed settings document used by this generation. */
   settingsDocument: string
-  /** Requested provider and the fail-closed provider effective for this generation. */
-  market: DesktopMarketSnapshot
-  aaEnabled: boolean
-  aaFailure?: string
-  /** Internal boot diagnostic when the requested provider was disabled. */
-  marketFailure?: string
   /** Whether packaged pnpm must rebuild a legacy Profile dependency layout. */
   requiresDependencyMigration: boolean
 }
 
 /** Optional observations emitted before profile preparation can fail. */
 export interface DesktopProfilePreparationHooks {
-  /** Explicit Profile choice; false also enforces safe-mode exclusion. */
-  aaEnabled?: boolean
-
   /** Receive the trusted settings path before its contents are parsed. */
   onSettingsDocumentResolved?: (path: string) => void
   /** LAN IPv4 literals sampled once before this profile generation is composed. */
@@ -852,29 +835,16 @@ function profileDependencyMigrationRequired(
   return workspaceChanged || !modulesCompatible || !lockfileCompatible
 }
 
-interface RecoveryFilteredProfile {
-  readonly profile: Profile
-  readonly dshMarketFailure?: string
-  readonly aaFailure?: string
-}
-
-/** Render one provider failure without leaking an arbitrary thrown object into public state. */
-function marketFailureMessage(cause: unknown): string {
-  return cause instanceof Error ? cause.message : String(cause)
-}
-
 /**
  * Load a profile while resolving disabled third-party bundles only after they have been filtered.
  * Every direct bundle uses the same Desktop/Profile SemVer overlay that Loader imports use.
- * The `dshmarket` bundle is filtered before resolution unless explicitly selected.
+ * Retired market/AA bundles are skipped so healed-yet-unwritten manifests still boot.
  */
 function loadRecoveryFilteredProfile(
   profileName: string,
   profileDir: string,
   disabledBundles: ReadonlySet<string>,
-  marketProvider: DesktopMarketProvider,
-  aaEnabled: boolean,
-): RecoveryFilteredProfile {
+): Profile {
   if (!existsSync(join(profileDir, 'package.json'))) {
     const template = PROFILE_TEMPLATES[profileName]
     if (template === undefined) {
@@ -889,70 +859,41 @@ function loadRecoveryFilteredProfile(
     throw new Error(`${BIN_NAME}: dsh.profile.bundles must be an array of package names`)
   }
   const bundles = (rawBundles ?? []) as string[]
-  const selectedBundles = bundles.filter(packageName =>
-    (aaEnabled || packageName !== AA_PACKAGE_NAME) &&
-    packageName !== DESKTOP_MARKET_IDENTITIES.community.packageName
-    && (marketProvider === DESKTOP_MARKET_IDENTITIES.dshMarket.provider
-      || packageName !== DESKTOP_MARKET_IDENTITIES.dshMarket.packageName),
-  )
-  if (marketProvider === DESKTOP_MARKET_IDENTITIES.dshMarket.provider
-    && !selectedBundles.includes(DESKTOP_MARKET_IDENTITIES.dshMarket.packageName)) {
-    selectedBundles.push(DESKTOP_MARKET_IDENTITIES.dshMarket.packageName)
-  }
-  if (aaEnabled && !selectedBundles.includes(AA_PACKAGE_NAME)) selectedBundles.push(AA_PACKAGE_NAME)
   const layers: Profile['layers'] = []
-  let aaFailure: string | undefined
-  let dshMarketFailure: string | undefined
   const installPackageUrl = pathToFileURL(INSTALL_ANCHOR).href
   const profilePackageUrl = pathToFileURL(join(profileDir, 'package.json')).href
-  for (const packageName of selectedBundles) {
-    const isDshMarket = packageName === DESKTOP_MARKET_IDENTITIES.dshMarket.packageName
-    const isAa = packageName === AA_PACKAGE_NAME
-    if (!isAa && !isDshMarket && desktopPluginBundleMutable(packageName) && disabledBundles.has(packageName)) continue
-    try {
-      const packageDir = resolveOverlayPackage(packageName, {
-        installPackageUrl,
-        profilePackageUrl,
-      }).selected.packageDir
-      const bundleManifest: unknown = JSON.parse(readFileSync(join(packageDir, 'package.json'), 'utf8'))
-      if ((isDshMarket || isAa) && (bundleManifest === null || typeof bundleManifest !== 'object'
-        || Array.isArray(bundleManifest)
-        || (bundleManifest as { name?: unknown }).name !== packageName)) {
-        throw new Error(`${BIN_NAME}: selected ${packageName} bundle has an invalid package identity`)
-      }
-      const declared = bundleManifest !== null && typeof bundleManifest === 'object'
-        ? (bundleManifest as { dsh?: { bundle?: { patch?: unknown } } }).dsh?.bundle?.patch
-        : undefined
-      const declaredList = typeof declared === 'string' ? [declared] : declared
-      if (!Array.isArray(declaredList) || declaredList.length === 0
-        || declaredList.some(entry => typeof entry !== 'string' || entry.length === 0)) {
-        throw new Error(`${BIN_NAME}: profile bundle ${JSON.stringify(packageName)} declares no dsh.bundle in its package.json`)
-      }
-      const patchPaths = bundlePatchPaths(packageDir, { patch: declaredList as string[] })
-      layers.push({
-        packageName,
-        packageDir,
-        patchPaths,
-        patches: patchPaths.flatMap(path => loadOverlayPatches(BIN_NAME, path)),
-      })
-    } catch (cause) {
-      if (isAa) aaFailure = marketFailureMessage(cause)
-      else if (isDshMarket) dshMarketFailure = marketFailureMessage(cause)
-      else throw cause
+  for (const packageName of bundles) {
+    if (OBSOLETE_DESKTOP_BUNDLE_SET.has(packageName)) continue
+    if (desktopPluginBundleMutable(packageName) && disabledBundles.has(packageName)) continue
+    const packageDir = resolveOverlayPackage(packageName, {
+      installPackageUrl,
+      profilePackageUrl,
+    }).selected.packageDir
+    const bundleManifest: unknown = JSON.parse(readFileSync(join(packageDir, 'package.json'), 'utf8'))
+    const declared = bundleManifest !== null && typeof bundleManifest === 'object'
+      ? (bundleManifest as { dsh?: { bundle?: { patch?: unknown } } }).dsh?.bundle?.patch
+      : undefined
+    const declaredList = typeof declared === 'string' ? [declared] : declared
+    if (!Array.isArray(declaredList) || declaredList.length === 0
+      || declaredList.some(entry => typeof entry !== 'string' || entry.length === 0)) {
+      throw new Error(`${BIN_NAME}: profile bundle ${JSON.stringify(packageName)} declares no dsh.bundle in its package.json`)
     }
+    const patchPaths = bundlePatchPaths(packageDir, { patch: declaredList as string[] })
+    layers.push({
+      packageName,
+      packageDir,
+      patchPaths,
+      patches: patchPaths.flatMap(path => loadOverlayPatches(BIN_NAME, path)),
+    })
   }
   const patchPath = join(profileDir, PROFILE_PATCH_FILENAME)
   return {
-    profile: {
-      name: profileName,
-      dir: profileDir,
-      layers,
-      skippedBundles: [],
-      patchPath,
-      patches: existsSync(patchPath) ? loadOverlayPatches(BIN_NAME, patchPath) : [],
-    },
-    ...(dshMarketFailure === undefined ? {} : { dshMarketFailure }),
-    ...(aaFailure === undefined ? {} : { aaFailure }),
+    name: profileName,
+    dir: profileDir,
+    layers,
+    skippedBundles: [],
+    patchPath,
+    patches: existsSync(patchPath) ? loadOverlayPatches(BIN_NAME, patchPath) : [],
   }
 }
 
@@ -1081,107 +1022,41 @@ function omitUnresolvedOptionalEntries(
   }
 }
 
-interface MarketPatchFilter {
-  readonly patches: PatchOptions[]
-  readonly removedProviderReference: boolean
+/** Return whether one Loader row claims a retired market/AA identity. */
+function isRetiredProviderEntry(entry: { readonly id?: unknown, readonly name?: unknown }): boolean {
+  return (typeof entry.id === 'string' && RETIRED_PROVIDER_ROW_IDS.has(entry.id))
+    || (typeof entry.name === 'string' && (RETIRED_PROVIDER_PACKAGES.has(entry.name)
+      || entry.name.startsWith('@agents-anywhere/dsh-bridge-next/')))
 }
 
-/** Return whether one Loader row claims either Desktop-owned Market identity. */
-function isMarketProviderEntry(entry: { readonly id?: unknown, readonly name?: unknown }): boolean {
-  return (typeof entry.id === 'string' && MARKET_ROW_IDS.has(entry.id))
-    || (typeof entry.name === 'string' && MARKET_PACKAGE_NAMES.has(entry.name))
-}
-
-/** Remove provider rows recursively before an untrusted patch can activate either implementation. */
-function filterMarketProviderRows(rows: EntryOptions[], matches = isMarketProviderEntry): {
-  rows: EntryOptions[]
-  removedProviderReference: boolean
-} {
+/** Remove retired provider rows recursively before a stale user patch can re-activate them. */
+function filterRetiredProviderRows(rows: EntryOptions[]): EntryOptions[] {
   const filtered: EntryOptions[] = []
-  let removedProviderReference = false
   for (const row of rows) {
-    if (matches(row)) {
-      removedProviderReference = true
-      continue
-    }
+    if (isRetiredProviderEntry(row)) continue
     if (row.group === true && Array.isArray(row.config)) {
-      const nested = filterMarketProviderRows(row.config, matches)
-      removedProviderReference ||= nested.removedProviderReference
-      filtered.push(nested.removedProviderReference ? { ...row, config: nested.rows } : row)
+      const nested = filterRetiredProviderRows(row.config)
+      filtered.push(nested.length === row.config.length ? row : { ...row, config: nested })
     } else {
       filtered.push(row)
     }
   }
-  return { rows: filtered, removedProviderReference }
+  return filtered
 }
 
-/** Strip provider inserts and overrides from every non-provider layer. */
-function filterMarketProviderPatches(patches: PatchOptions[], matches = isMarketProviderEntry): MarketPatchFilter {
+/** Strip retired provider inserts and overrides from every patch layer. */
+function filterRetiredProviderPatches(patches: PatchOptions[]): PatchOptions[] {
   const filtered: PatchOptions[] = []
-  let removedProviderReference = false
   for (const patch of patches) {
-    if (matches(patch)) {
-      removedProviderReference = true
-      continue
-    }
+    if (isRetiredProviderEntry(patch)) continue
     if (Array.isArray(patch.insert)) {
-      const insert = filterMarketProviderRows(patch.insert, matches)
-      removedProviderReference ||= insert.removedProviderReference
-      filtered.push(insert.removedProviderReference ? { ...patch, insert: insert.rows } : patch)
+      const insert = filterRetiredProviderRows(patch.insert)
+      filtered.push(insert.length === patch.insert.length ? patch : { ...patch, insert })
     } else {
       filtered.push(patch)
     }
   }
-  return { patches: filtered, removedProviderReference }
-}
-
-/** AA is an optional bundle; user layers cannot bypass its Desktop selection. */
-function isAaEntry(entry: { readonly id?: unknown, readonly name?: unknown }): boolean {
-  return entry.id === AA_ROW_ID || entry.name === AA_PACKAGE_NAME
-    || (typeof entry.name === 'string' && entry.name.startsWith(`${AA_PACKAGE_NAME}/`))
-}
-
-/** Accept only the audited single-row contract from the selected direct bundle layer. */
-export function validateDshMarketBundlePatches(patches: readonly PatchOptions[]): void {
-  const rows = composeEntries([[...patches]])
-  const row = rows[0]
-  if (rows.length !== 1 || row === undefined
-    || row.id !== DESKTOP_MARKET_IDENTITIES.dshMarket.rowId
-    || row.name !== DESKTOP_MARKET_IDENTITIES.dshMarket.packageName
-    || Object.keys(row).some(key => key !== 'id' && key !== 'name')) {
-    throw new Error(`${BIN_NAME}: dshmarket bundle patch must insert exactly the canonical dsh-market row`)
-  }
-}
-
-/** Ensure a Desktop dependency is resolvable through the selected profile fallback. */
-function validateMarketPackage(name: string, profilePackageUrl: string): string | undefined {
-  try {
-    resolveOverlayPackage(name, {
-      installPackageUrl: pathToFileURL(INSTALL_ANCHOR).href,
-      profilePackageUrl,
-    })
-  } catch (cause) {
-    return `${BIN_NAME}: cannot resolve selected Market package ${name}: ${marketFailureMessage(cause)}`
-  }
-}
-
-/** Assert the final graph contains only the provider selected by the launcher. */
-function assertEffectiveMarketRows(
-  rows: readonly EntryOptions[],
-  effective: DesktopMarketProvider,
-): void {
-  const providers = rows.filter(isMarketProviderEntry)
-  if (effective === 'disabled') {
-    if (providers.length !== 0) throw new Error(`${BIN_NAME}: disabled Market provider leaked into the Loader graph`)
-    return
-  }
-  const identity = effective === DESKTOP_MARKET_IDENTITIES.community.provider
-    ? DESKTOP_MARKET_IDENTITIES.community
-    : DESKTOP_MARKET_IDENTITIES.dshMarket
-  if (providers.length !== 1 || providers[0]?.id !== identity.rowId
-    || providers[0]?.name !== identity.packageName) {
-    throw new Error(`${BIN_NAME}: selected Market provider did not compose to one canonical Loader row`)
-  }
+  return filtered
 }
 
 /**
@@ -1226,7 +1101,6 @@ function loadDesktopMachinePatches(home: string): PatchOptions[] {
  * @param platform - native platform selecting launcher-owned safety overlays.
  * @param profileName - existing or lazily available Web profile to compose.
  * @param pluginStatePath - optional Desktop-private disabled-bundle state.
- * @param marketSelection - machine-level provider request fixed for this generation.
  * @returns root config, profile metadata, and ordered patches.
  */
 export function prepareDesktopProfile(
@@ -1235,7 +1109,6 @@ export function prepareDesktopProfile(
   platform: NodeJS.Platform = process.platform,
   profileName: string = DESKTOP_PROFILE_NAME,
   pluginStatePath?: string,
-  marketSelection: DesktopMarketSnapshot = DEFAULT_DESKTOP_MARKET_SNAPSHOT,
   hooks: DesktopProfilePreparationHooks = {},
 ): PreparedDesktopProfile {
   const lanAddresses = preparedLanAddresses(hooks.lanAddresses)
@@ -1244,29 +1117,19 @@ export function prepareDesktopProfile(
     : resolveProfileDir(profileName, home)
   const workspaceChanged = reconcileProfilePnpmWorkspace(profileDir)
   const requiresDependencyMigration = profileDependencyMigrationRequired(profileDir, workspaceChanged, platform)
-  // `plugin-management` remains the community market's user-facing scope.
-  // Recovery mode no longer reads or writes an independent disable policy:
-  // package removal goes through the provider-neutral `dsh plugin remove`.
-  const managedDisabledBundles = pluginStatePath === undefined
+  // The plugin-management scope now applies to every launch: package removal
+  // goes through the provider-neutral `dsh plugin remove`.
+  const disabledBundles = pluginStatePath === undefined
     ? new Set<string>()
     : readDesktopDisabledBundles(pluginStatePath, profileName)
-  const disabledBundles = marketSelection.requested === DESKTOP_MARKET_IDENTITIES.community.provider
-    ? new Set(managedDisabledBundles)
-    : new Set<string>()
-  const loadedProfile = loadRecoveryFilteredProfile(
-    profileName,
-    profileDir,
-    disabledBundles,
-    marketSelection.requested,
-    hooks.aaEnabled === true,
-  )
-  // Only the patch document is substitutable: bundle layers, disabled-bundle
-  // filtering and Market/AA admission stay launcher-owned even while an edit is
-  // in flight, because the editor's own `loadProfileDirectory` view of them is
-  // the unfiltered CLI one and must never replace ours.
+  const loadedProfile = loadRecoveryFilteredProfile(profileName, profileDir, disabledBundles)
+  // Only the patch document is substitutable: bundle layers and disabled-bundle
+  // filtering stay launcher-owned even while an edit is in flight, because the
+  // editor's own `loadProfileDirectory` view of them is the unfiltered CLI one
+  // and must never replace ours.
   const profile = hooks.profilePatches === undefined
-    ? loadedProfile.profile
-    : { ...loadedProfile.profile, patches: structuredClone([...hooks.profilePatches]) }
+    ? loadedProfile
+    : { ...loadedProfile, patches: structuredClone([...hooks.profilePatches]) }
   const rootConfig = join(profileDir, DESKTOP_PROFILE_ROOT)
   const bareModuleBaseUrl = pathToFileURL(join(profile.dir, 'package.json')).href
   // Profile HMR reuses preparation; do not retrigger the root watcher on reads.
@@ -1276,20 +1139,8 @@ export function prepareDesktopProfile(
 
   const desktopPatches = loadOverlayPatches(BIN_NAME, DESKTOP_PATCH_PATH)
   const bundlePatches: PatchOptions[] = []
-  let aaLayer: Profile['layers'][number] | undefined
-  let dshMarketPatches: PatchOptions[] | undefined
   let desktopLayerInserted = false
-  const providerAwareDisabledBundles = new Set(disabledBundles)
-  if (marketSelection.requested === DESKTOP_MARKET_IDENTITIES.dshMarket.provider) {
-    providerAwareDisabledBundles.delete(DESKTOP_MARKET_IDENTITIES.dshMarket.packageName)
-  }
-  if (hooks.aaEnabled === true) providerAwareDisabledBundles.delete(AA_PACKAGE_NAME)
-  for (const layer of activeDesktopProfileLayers(profile, providerAwareDisabledBundles)) {
-    if (layer.packageName === AA_PACKAGE_NAME) { aaLayer = layer; continue }
-    if (layer.packageName === DESKTOP_MARKET_IDENTITIES.dshMarket.packageName) {
-      dshMarketPatches = layer.patches
-      continue
-    }
+  for (const layer of activeDesktopProfileLayers(profile, disabledBundles)) {
     bundlePatches.push(...layer.patches)
     if (layer.packageName !== '@deepseek-ai/dsh-web-app') continue
     bundlePatches.push(...desktopPatches)
@@ -1304,79 +1155,13 @@ export function prepareDesktopProfile(
     loadedHomePatches,
     bareModuleBaseUrl,
   )
-  const filteredBundles = filterMarketProviderPatches(bundlePatches)
-  const filteredProfile = filterMarketProviderPatches(profile.patches)
-  const filteredHome = filterMarketProviderPatches(homePatches)
-  const hasProviderConflict = filteredBundles.removedProviderReference
-    || filteredProfile.removedProviderReference
-    || filteredHome.removedProviderReference
-  let effectiveMarket: DesktopMarketProvider = 'disabled'
-  let marketFailure: string | undefined
-  const providerPatches: PatchOptions[] = []
-  if (marketSelection.requested !== 'disabled') {
-    if (hasProviderConflict) {
-      marketFailure = `${BIN_NAME}: conflicting Market provider Loader identity was removed`
-    } else if (marketSelection.requested === DESKTOP_MARKET_IDENTITIES.community.provider) {
-      marketFailure = validateMarketPackage(
-        DESKTOP_MARKET_IDENTITIES.community.packageName,
-        bareModuleBaseUrl,
-      )
-      if (marketFailure === undefined) {
-        providerPatches.push({
-          insert: [{
-            id: DESKTOP_MARKET_IDENTITIES.community.rowId,
-            name: DESKTOP_MARKET_IDENTITIES.community.packageName,
-          }],
-        })
-        effectiveMarket = DESKTOP_MARKET_IDENTITIES.community.provider
-      }
-    } else if (loadedProfile.dshMarketFailure !== undefined) {
-      marketFailure = loadedProfile.dshMarketFailure
-    } else if (dshMarketPatches === undefined) {
-      marketFailure = `${BIN_NAME}: selected dshmarket bundle layer is unavailable`
-    } else {
-      try {
-        validateDshMarketBundlePatches(dshMarketPatches)
-        providerPatches.push(...dshMarketPatches)
-        effectiveMarket = DESKTOP_MARKET_IDENTITIES.dshMarket.provider
-      } catch (cause) {
-        marketFailure = marketFailureMessage(cause)
-      }
-    }
-  }
-  const ordinary = filterMarketProviderPatches([
-    ...filteredBundles.patches,
-    ...providerPatches,
-    ...filteredProfile.patches,
-    ...filteredHome.patches,
-  ], isAaEntry)
-  const aaPatches: PatchOptions[] = []
-  let aaFailure = loadedProfile.aaFailure
-  if (hooks.aaEnabled === true && aaFailure === undefined) {
-    try {
-      if (ordinary.removedProviderReference) throw new Error('conflicting AA configuration was removed')
-      if (!aaLayer) throw new Error('selected AA bundle layer is unavailable')
-      const aaRows = composeEntries([aaLayer.patches])
-      const aaRow = aaRows.find(row => row.id === AA_ROW_ID && row.name === AA_PACKAGE_NAME)
-      if (!aaRow || aaRows.length !== 1 || aaRow.disabled === true) {
-        throw new Error('AA bundle must contain one active canonical plugin entry')
-      }
-      // Preserve the declared bundle. Supply only the actual Harness home and
-      // the physical Python payload path required when Electron uses ASAR.
-      const connectorSourceDir = join(aaLayer.packageDir, 'lib', 'bundled-connector')
-        .replace(/([\\/])app\.asar([\\/])/u, '$1app.asar.unpacked$2')
-      if (!existsSync(join(connectorSourceDir, 'pyproject.toml'))) throw new Error('AA Connector payload is unavailable')
-      aaPatches.push(...aaLayer.patches, { id: AA_ROW_ID, config: {
-        ...rowConfig(aaRow), dshHome: home, connectorSourceDir,
-      } })
-    } catch (cause) {
-      aaFailure = marketFailureMessage(cause)
-    }
-  }
-  const patches: PatchOptions[] = [...ordinary.patches, ...aaPatches]
+  const patches: PatchOptions[] = filterRetiredProviderPatches([
+    ...bundlePatches,
+    ...profile.patches,
+    ...homePatches,
+  ])
   const composedRows = composeEntries([patches])
   assertUniqueEntryIds(composedRows)
-  assertEffectiveMarketRows(composedRows, effectiveMarket)
   const rows = new Map<string, EntryOptions>()
   for (const row of composedRows) {
     if (typeof row.id === 'string') rows.set(row.id, row)
@@ -1418,7 +1203,6 @@ export function prepareDesktopProfile(
       platform,
       profileName,
       pluginStatePath,
-      marketSelection,
       hooks,
     )
   }
@@ -1612,8 +1396,6 @@ export function prepareDesktopProfile(
       platform,
       profileName,
       pluginStatePath,
-      marketSelection: structuredClone(marketSelection),
-      aaEnabled: hooks.aaEnabled === true,
     },
     profile,
     rootConfig,
@@ -1629,11 +1411,7 @@ export function prepareDesktopProfile(
     networkExposure,
     lanAddresses,
     settingsDocument,
-    aaEnabled: aaPatches.length > 0,
-    ...(aaFailure === undefined ? {} : { aaFailure }),
-    market: desktopMarketSnapshotWithEffective(marketSelection, effectiveMarket),
     requiresDependencyMigration,
-    ...(marketFailure === undefined ? {} : { marketFailure }),
   }
 }
 

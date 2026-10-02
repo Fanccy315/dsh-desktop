@@ -15,13 +15,12 @@ import {
 import type { Stats } from 'node:fs'
 import { dirname, isAbsolute, join, resolve } from 'node:path'
 import { writeFileAtomic } from '@deepseek-ai/dsh-atomic-write'
-import type { DesktopMarketProvider } from './desktop-market.ts'
 import type { DesktopNetworkExposure } from './desktop-network.ts'
 import type { DesktopNotificationSettings } from './notifications.ts'
 import type { DesktopShellMode } from './runtime.ts'
 
 const BIN_NAME = 'dsh-plugin-desktop'
-const STATE_VERSION = 1
+const STATE_VERSION = 2
 const STATE_ROOT_DIRECTORY = 'profile-preferences'
 const STATE_FILENAME = 'state.json'
 const STATE_DIRECTORY_MODE = 0o700
@@ -31,8 +30,6 @@ const HASH_PATTERN = /^[0-9a-f]{64}$/u
 const CHECK_POSIX_MODE = process.platform !== 'win32'
 
 const SELECTION_KEYS = Object.freeze([
-  'aaEnabled',
-  'market',
   'mode',
   'networkExposure',
   'notifications',
@@ -50,8 +47,6 @@ const NOTIFICATION_KEYS = Object.freeze([
 ] as const)
 
 const STATE_KEYS = Object.freeze([
-  'aaEnabled',
-  'market',
   'mode',
   'networkExposure',
   'notifications',
@@ -67,13 +62,11 @@ export interface DesktopProfilePreferences {
   readonly openBrowser: boolean
   readonly networkExposure: DesktopNetworkExposure
   readonly notifications: Readonly<DesktopNotificationSettings>
-  readonly aaEnabled?: boolean
-  readonly market: DesktopMarketProvider
 }
 
-/** Complete version-one state stored beneath the Electron user-data directory. */
-export interface DesktopProfilePreferencesStateV1 extends DesktopProfilePreferences {
-  readonly version: 1
+/** Complete state stored beneath the Electron user-data directory. */
+export interface DesktopProfilePreferencesStateV2 extends DesktopProfilePreferences {
+  readonly version: 2
   readonly profileHash: string
   readonly recordedAt: string
 }
@@ -82,16 +75,12 @@ export interface DesktopProfilePreferencesStateV1 extends DesktopProfilePreferen
 export function desktopProfilePreferencesFromSettings(
   desktop: Pick<DesktopProfilePreferences, 'mode' | 'openBrowser' | 'networkExposure'>,
   notifications: Readonly<DesktopNotificationSettings>,
-  market: DesktopMarketProvider,
-  aaEnabled = false,
 ): DesktopProfilePreferences {
   return Object.freeze({
     mode: desktop.mode,
     openBrowser: desktop.openBrowser,
     networkExposure: desktop.networkExposure,
     notifications: Object.freeze({ ...notifications }),
-    market,
-    aaEnabled,
   })
 }
 
@@ -110,7 +99,7 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 }
 
 function hasExactKeys(value: Record<string, unknown>, expected: readonly string[]): boolean {
-  const actual = Object.keys(expected.includes('aaEnabled') ? { aaEnabled: false, ...value } : value).sort()
+  const actual = Object.keys(value).sort()
   return actual.length === expected.length && actual.every((key, index) => key === expected[index])
 }
 
@@ -129,11 +118,6 @@ function assertMode(value: unknown, error: ErrorFactory): DesktopShellMode {
 function assertExposure(value: unknown, error: ErrorFactory): DesktopNetworkExposure {
   if (value === 'loopback' || value === 'lan') return value
   throw error('networkExposure must be loopback or lan')
-}
-
-function assertMarket(value: unknown, error: ErrorFactory): DesktopMarketProvider {
-  if (value === 'disabled' || value === 'community-market' || value === 'dsh-market') return value
-  throw error('market must be disabled, community-market, or dsh-market')
 }
 
 function assertRecordedAt(value: unknown, error: ErrorFactory): string {
@@ -174,7 +158,6 @@ function normalizedPreferences(
   if (!isRecord(value) || !hasExactKeys(value, SELECTION_KEYS)) {
     throw error('preferences must contain exactly the supported fields')
   }
-  if (value.aaEnabled !== undefined && typeof value.aaEnabled !== 'boolean') throw error('aaEnabled must be a boolean')
   const mode = assertMode(value.mode, error)
   if (typeof value.openBrowser !== 'boolean') throw error('openBrowser must be a boolean')
   const networkExposure = assertExposure(value.networkExposure, error)
@@ -189,8 +172,6 @@ function normalizedPreferences(
     openBrowser: value.openBrowser,
     networkExposure,
     notifications: normalizedNotifications(value.notifications, error),
-    aaEnabled: value.aaEnabled === true,
-    market: assertMarket(value.market, error),
   })
 }
 
@@ -286,17 +267,21 @@ function readStateBytes(path: string): string | undefined {
   }
 }
 
-function parseState(text: string, expectedProfileHash: string): DesktopProfilePreferencesStateV1 {
+function parseState(text: string, expectedProfileHash: string): DesktopProfilePreferencesStateV2 | undefined {
   let value: unknown
   try {
     value = JSON.parse(text) as unknown
   } catch {
     throw invalid('state must contain valid JSON')
   }
-  if (!isRecord(value) || !hasExactKeys(value, STATE_KEYS)) {
-    throw invalid('state must contain exactly the version-one fields')
-  }
+  if (!isRecord(value)) throw invalid('state must contain exactly the version-two fields')
+  // Version 1 stored the retired market/aaEnabled fields. Treat it as absent so
+  // the launcher re-imports from the settings document and writes fresh state.
+  if (value.version === 1) return undefined
   if (value.version !== STATE_VERSION) throw invalid('state has an unsupported version')
+  if (!hasExactKeys(value, STATE_KEYS)) {
+    throw invalid('state must contain exactly the version-two fields')
+  }
   if (typeof value.profileHash !== 'string' || !HASH_PATTERN.test(value.profileHash)
     || value.profileHash !== expectedProfileHash) {
     throw invalid('state Profile identity does not match its path')
@@ -306,8 +291,6 @@ function parseState(text: string, expectedProfileHash: string): DesktopProfilePr
     openBrowser: value.openBrowser,
     networkExposure: value.networkExposure,
     notifications: value.notifications,
-    aaEnabled: value.aaEnabled,
-    market: value.market,
   }, invalid)
   return Object.freeze({
     version: STATE_VERSION,
@@ -321,7 +304,7 @@ function parseState(text: string, expectedProfileHash: string): DesktopProfilePr
 export function readDesktopProfilePreferences(
   userDataDir: string,
   profileDir: string,
-): DesktopProfilePreferencesStateV1 | undefined {
+): DesktopProfilePreferencesStateV2 | undefined {
   const path = desktopProfilePreferencesStatePath(userDataDir, profileDir)
   const root = dirname(dirname(path))
   const profileRoot = dirname(path)
@@ -340,14 +323,14 @@ export async function writeDesktopProfilePreferences(
   profileDir: string,
   value: DesktopProfilePreferences,
   recordedAt: string = new Date().toISOString(),
-): Promise<DesktopProfilePreferencesStateV1> {
+): Promise<DesktopProfilePreferencesStateV2> {
   const path = desktopProfilePreferencesStatePath(userDataDir, profileDir)
   const profileHash = desktopProfilePreferencesProfileHash(profileDir)
   const preferences = normalizedPreferences(value, invalidUpdate)
   const canonicalRecordedAt = assertRecordedAt(recordedAt, invalidUpdate)
   ensurePrivateDirectory(dirname(dirname(path)))
   ensurePrivateDirectory(dirname(path))
-  const state: DesktopProfilePreferencesStateV1 = Object.freeze({
+  const state: DesktopProfilePreferencesStateV2 = Object.freeze({
     version: STATE_VERSION,
     profileHash,
     ...preferences,

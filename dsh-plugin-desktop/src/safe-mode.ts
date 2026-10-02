@@ -9,7 +9,6 @@ import {
 } from 'node:fs'
 import { isAbsolute, join, resolve } from 'node:path'
 import { cleanupDisposableTree } from './disposable-tree.ts'
-import type { DesktopMarketProvider } from './desktop-market.ts'
 import type { DesktopSetupWizardSettings } from './setup-wizard-settings.ts'
 
 const BIN_NAME = 'dsh-plugin-desktop'
@@ -25,12 +24,8 @@ export const DESKTOP_SAFE_MODE_PROFILE_NAME = 'desktop-safe-mode'
 
 /** Fixed, disposable preferences used without showing first-run Setup. */
 export const DESKTOP_SAFE_MODE_DEFAULTS: Readonly<{
-  aaEnabled: false
-  market: DesktopMarketProvider
   settings: DesktopSetupWizardSettings
 }> = Object.freeze({
-  aaEnabled: false,
-  market: 'disabled',
   settings: Object.freeze({
     mode: 'compatibility',
     macosMaterial: 'off',

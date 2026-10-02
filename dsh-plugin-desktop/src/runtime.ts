@@ -177,8 +177,6 @@ export interface DesktopShellSpec extends DesktopWindowConfig {
    * its presentation; Setup's own continuation offers the restart that applies it.
    */
   applySetupSettings?(settings: DesktopSetupWizardSettings): Promise<void>
-  readRemoteControl?(): Promise<boolean>
-  enableRemoteControl?(): Promise<void>
 }
 
 /** Electron bootstrap capability supplied before the profile tree mounts. */

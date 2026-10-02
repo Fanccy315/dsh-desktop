@@ -64,13 +64,11 @@ export function createHostRuntime(rpc: HostRpc, snapshot: RuntimeSnapshot): Desk
     },
     schedule(spec) {
       const callback = callbacks({ quit: spec.requestQuit, mode: spec.requestModeChange,
-        ...(spec.readRemoteControl ? { remoteRead: spec.readRemoteControl } : {}),
-        ...(spec.enableRemoteControl ? { remoteEnable: spec.enableRemoteControl } : {}),
         ...(spec.applySetupSettings ? { setup: spec.applySetupSettings } : {}),
       })
-      const { readLocalePreference, readThemeSource, requestQuit: _quit, requestModeChange: _mode, readRemoteControl: _remoteRead, enableRemoteControl: _remoteEnable, applySetupSettings: _setup, ...data } = spec
+      const { readLocalePreference, readThemeSource, requestQuit: _quit, requestModeChange: _mode, applySetupSettings: _setup, ...data } = spec
       shellSpecs.set(callback.id, spec)
-      trackSetup(send('shell:schedule', [callback.id, data, readLocalePreference(), readThemeSource(), Boolean(spec.readRemoteControl && spec.enableRemoteControl), Boolean(spec.applySetupSettings)]))
+      trackSetup(send('shell:schedule', [callback.id, data, readLocalePreference(), readThemeSource(), Boolean(spec.applySetupSettings)]))
       return async () => { try { await send('shell:dispose', [callback.id]) } finally { shellSpecs.delete(callback.id); callback.release() } }
     },
     // The parent mounts only after Host boot and this barrier finish.
@@ -159,7 +157,7 @@ export function bindNativeRuntime(rpc: HostRpc, runtime: DesktopRuntime): () => 
   handle('native:openProfileCreateWindow', ([id]) => runtime.openProfileCreateWindow({
     onSubmit: name => callback(`${id}:submit`, [name]), onCancel: () => report(callback(`${id}:cancel`)),
   }))
-  handle('shell:schedule', ([id, data, locale, theme, remoteControl, setupSettings]) => {
+  handle('shell:schedule', ([id, data, locale, theme, setupSettings]) => {
     if (shells.has(id)) throw new Error('Duplicate Host shell')
     const state = { locale, theme }
     preferences.set(id, state)
@@ -167,10 +165,6 @@ export function bindNativeRuntime(rpc: HostRpc, runtime: DesktopRuntime): () => 
       readLocalePreference: () => state.locale, readThemeSource: () => state.theme,
       requestQuit: code => report(callback(`${id}:quit`, [code])),
       requestModeChange: mode => callback(`${id}:mode`, [mode]),
-      ...(remoteControl ? {
-        readRemoteControl: () => callback(`${id}:remoteRead`),
-        enableRemoteControl: () => callback(`${id}:remoteEnable`),
-      } : {}),
       ...(setupSettings ? {
         applySetupSettings: (settings: unknown) => callback(`${id}:setup`, [settings]),
       } : {}),

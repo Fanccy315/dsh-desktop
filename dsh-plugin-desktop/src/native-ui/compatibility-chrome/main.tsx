@@ -42,10 +42,6 @@ export function Chrome() {
   return <DesktopFrameTitlebarView
     key={generation}
     api={api}
-    {...(state.remoteControl && !state.remoteControl.enabled ? { remoteControl: {
-      seen: state.remoteControl.seen,
-      open: () => invoke('remote-control'),
-    } } : {})}
     t={key => copy[key]}
     environment={{ ...state, material: state.material !== 'off' && state.platform === 'darwin' ? 'transparent' : 'off' }}
     setMode={mode => mode === state.mode ? Promise.resolve() : invoke(`mode-${mode}`)}

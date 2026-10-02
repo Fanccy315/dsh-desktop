@@ -29,7 +29,7 @@ it('writes a plugin-reported agent failure to the real Host log files', async ()
   let stderr = ''
   try {
     writeFileSync(join(home, 'settings.yaml'), 'dsh-desktop:\n  mode: advanced\nagent-presets:\n  default: minimal\n')
-    const prepared = prepareDesktopProfile('1', home, 'win32', undefined, undefined, undefined, { aaEnabled: false })
+    const prepared = prepareDesktopProfile('1', home, 'win32')
     prepared.overlays = []
     prepared.port = 0
 
@@ -95,7 +95,7 @@ export function apply(ctx) {
     const logDirectory = join(home, 'logs')
     await rpc.call<{ pid: number }>('boot', [{
       prepared, profilePreferences: { mode: 'advanced', openBrowser: false, networkExposure: 'loopback',
-        macosMaterial: 'auto', windowsMaterial: 'auto', market: 'disabled', notifications: { enabled: false }, aaEnabled: false },
+        macosMaterial: 'auto', windowsMaterial: 'auto', notifications: { enabled: false } },
       homeDir: home, activeProfileName: prepared.profile.name, pluginManagementStatePath: join(home, 'plugins.json'),
       selectionStatePath: join(home, 'selection.json'), marketUserDataDir: join(home, 'userdata'),
       releaseUserDataLocations: desktopReleaseUserDataLocations(home, join(home, 'userdata')),

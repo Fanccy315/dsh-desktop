@@ -37,17 +37,12 @@ it.each(['zh', undefined] as const)('synchronizes tray language at boot and on c
       readLocalePreference: () => language, readThemeSource: () => 'dark',
       requestQuit() {}, requestModeChange: mode,
     } as unknown as DesktopShellSpec
-    spec.readRemoteControl = vi.fn(async () => false)
-    spec.enableRemoteControl = vi.fn(async () => {})
     spec.applySetupSettings = vi.fn(async () => {})
     const stopShell = runtime.schedule(spec)
     runtime.registerTrayItem({ group: 'tools', order: 1, label: () => desktopTrayLabel(runtime.locale, 'openTerminal'), invoke,
       submenu: () => [{ label: () => desktopTrayLabel(runtime.locale, 'checkForUpdates'), invoke }] })
     language = initialPreference
     await runtime.mountScheduled()
-    expect(await shell.readRemoteControl?.()).toBe(false)
-    await shell.enableRemoteControl?.()
-    expect(spec.enableRemoteControl).toHaveBeenCalledTimes(1)
     expect(shell.url).toBe(spec.url)
     expect(shell.authenticationUrl).toBe(spec.authenticationUrl)
     expect(shell.rendererAccessHeader).toEqual(spec.rendererAccessHeader)
