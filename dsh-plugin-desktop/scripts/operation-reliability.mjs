@@ -15,7 +15,7 @@ export async function verifyOperationReliability(root = resolve(import.meta.dirn
   const failures = []
   if (document?.version !== 1 || document?.schema !== 'operation-reliability-matrix/v1') failures.push('document must declare schema version 1')
   const operations = document?.operations
-  if (!Array.isArray(operations) || operations.length < 6) failures.push('at least six operations are required')
+  if (!Array.isArray(operations) || operations.length < 5) failures.push('at least five operations are required')
   const operationIds = new Set()
   const scenarioIds = new Set()
   for (const operation of operations ?? []) {

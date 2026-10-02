@@ -267,7 +267,7 @@ function readStateBytes(path: string): string | undefined {
   }
 }
 
-function parseState(text: string, expectedProfileHash: string): DesktopProfilePreferencesStateV2 | undefined {
+function parseState(text: string, expectedProfileHash: string): DesktopProfilePreferencesStateV2 {
   let value: unknown
   try {
     value = JSON.parse(text) as unknown
@@ -275,9 +275,6 @@ function parseState(text: string, expectedProfileHash: string): DesktopProfilePr
     throw invalid('state must contain valid JSON')
   }
   if (!isRecord(value)) throw invalid('state must contain exactly the version-two fields')
-  // Version 1 stored the retired market/aaEnabled fields. Treat it as absent so
-  // the launcher re-imports from the settings document and writes fresh state.
-  if (value.version === 1) return undefined
   if (value.version !== STATE_VERSION) throw invalid('state has an unsupported version')
   if (!hasExactKeys(value, STATE_KEYS)) {
     throw invalid('state must contain exactly the version-two fields')

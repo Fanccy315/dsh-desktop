@@ -58,12 +58,10 @@ describe('Desktop product copy', () => {
     expect(copy.confirmFactoryResetBody('/Users/example/.dsh')).toContain('不会删除此目录以外的项目文件')
   })
 
-  it('ships localized native update and failure dialogs', () => {
+  it('ships localized native failure dialogs', () => {
     const copy = desktopNativeCopy('zh')
-    expect(copy.updateCheckFailedTitle).toBe('无法检查更新')
     expect(copy.terminalErrorTitle).toBe('无法打开 DSH 终端')
     expect(copy.diagnosticsErrorTitle).toBe('无法导出诊断信息')
-    expect(copy.updateAvailableMessage('2.1.0')).toBe('DSH Desktop 2.1.0 已可用。')
   })
 
   it('explains cross-channel Profile risk and routes users to Profile selection', () => {

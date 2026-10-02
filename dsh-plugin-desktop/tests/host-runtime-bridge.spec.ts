@@ -19,9 +19,6 @@ it.each(['zh', undefined] as const)('synchronizes tray language at boot and on c
   const native = {
     platform: 'win32', get locale() { return nativeLocale },
     setLocalePreference: (preference: DesktopLocale | undefined) => { nativeLocale = preference ?? 'zh' },
-    updates: { isPackaged: true, canDownload: true, currentVersion: '2.0.7-beta.1', statePath: '/tmp/update',
-      request: vi.fn(async () => new Response('{"version":"2.0.8-beta.1"}', { headers: { 'x-test': 'yes' } })),
-    },
     schedule: (value: DesktopShellSpec) => { shell = value; return disposeShell },
     registerTrayItem: (value: DesktopTrayItem) => { tray = value; return { refresh() {}, dispose: disposeTray } },
   } as unknown as DesktopRuntime
@@ -40,7 +37,7 @@ it.each(['zh', undefined] as const)('synchronizes tray language at boot and on c
     spec.applySetupSettings = vi.fn(async () => {})
     const stopShell = runtime.schedule(spec)
     runtime.registerTrayItem({ group: 'tools', order: 1, label: () => desktopTrayLabel(runtime.locale, 'openTerminal'), invoke,
-      submenu: () => [{ label: () => desktopTrayLabel(runtime.locale, 'checkForUpdates'), invoke }] })
+      submenu: () => [{ label: () => desktopTrayLabel(runtime.locale, 'exportDiagnostics'), invoke }] })
     language = initialPreference
     await runtime.mountScheduled()
     expect(shell.url).toBe(spec.url)
@@ -58,20 +55,17 @@ it.each(['zh', undefined] as const)('synchronizes tray language at boot and on c
     expect(runtime.locale).toBe('zh')
     expect(native.locale).toBe('zh')
     expect(tray.label()).toBe('打开 DSH 终端')
-    expect(tray.submenu?.()[0]?.label()).toBe('检查更新…')
+    expect(tray.submenu?.()[0]?.label()).toBe('导出诊断信息…')
     runtime.setLocalePreference('en')
     await vi.waitFor(() => expect(tray.label()).toBe('Open DSH Terminal'))
     expect(native.locale).toBe('en')
-    expect(tray.submenu?.()[0]?.label()).toBe('Check for Updates…')
+    expect(tray.submenu?.()[0]?.label()).toBe('Export Diagnostics…')
     runtime.setLocalePreference(undefined)
     await vi.waitFor(() => expect(tray.label()).toBe('打开 DSH 终端'))
     expect(runtime.locale).toBe('zh')
     expect(native.locale).toBe('zh')
     await tray.submenu?.()[0]?.invoke()
     expect(invoke).toHaveBeenCalledOnce()
-    const response = await runtime.updates.request('https://example.invalid', { headers: { accept: 'application/json' } })
-    expect(response.headers.get('x-test')).toBe('yes')
-    expect(await response.json()).toEqual({ version: '2.0.8-beta.1' })
     await stopShell()
     expect(disposeShell).toHaveBeenCalledOnce()
   } finally { await release(); parent.close(); child.close(); port1.close(); port2.close() }

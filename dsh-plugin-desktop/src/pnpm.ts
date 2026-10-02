@@ -50,11 +50,6 @@ export interface DesktopPnpmHandle {
 export interface DesktopPnpm {
   run(argv: readonly string[], signal?: AbortSignal): DesktopPnpmHandle
   runPlugin(argv: readonly string[], invokingDir: string, signal?: AbortSignal): DesktopPnpmHandle
-  runExternalMarketPluginInstall(
-    argv: readonly string[],
-    invokingDir: string,
-    signal?: AbortSignal,
-  ): DesktopPnpmHandle
 }
 
 declare module '@deepseek-ai/cordis' {
@@ -87,31 +82,6 @@ function validatedArgv(argv: readonly string[]): string[] {
     throw new Error(`${BIN_NAME}: desktop pnpm argv must contain only strings without NUL`)
   }
   return [...argv]
-}
-
-const NPM_PACKAGE_NAME_PATTERN = /^(?:@[a-z0-9][a-z0-9._-]*\/)?[a-z0-9][a-z0-9._-]*$/u
-const NPM_EXACT_VERSION_PATTERN = /^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?$/u
-
-function validatedExternalMarketArgv(argv: readonly string[]): string[] {
-  const args = validatedArgv(argv)
-  if (args[0] !== 'add') {
-    throw new Error(`${BIN_NAME}: external Market plugin install requires add with one exact npm package target`)
-  }
-  const targets = args.slice(1).filter(argument => !argument.startsWith('-'))
-  const target = targets[0]
-  const separator = target?.lastIndexOf('@') ?? -1
-  const packageName = separator > 0 ? target?.slice(0, separator) : undefined
-  const packageVersion = separator > 0 ? target?.slice(separator + 1) : undefined
-  if (
-    targets.length !== 1
-    || packageName === undefined
-    || packageVersion === undefined
-    || !NPM_PACKAGE_NAME_PATTERN.test(packageName)
-    || !NPM_EXACT_VERSION_PATTERN.test(packageVersion)
-  ) {
-    throw new Error(`${BIN_NAME}: external Market plugin install requires exactly one exact npm package target`)
-  }
-  return args
 }
 
 function validateBootstrap(bootstrap: DesktopPnpmBootstrap): void {
@@ -167,14 +137,6 @@ class DesktopPnpmService extends Service implements DesktopPnpm {
 
   runPlugin(argv: readonly string[], invokingDir: string, signal?: AbortSignal): DesktopPnpmHandle {
     return this.startPlugin(validatedArgv(argv), invokingDir, signal)
-  }
-
-  runExternalMarketPluginInstall(
-    argv: readonly string[],
-    invokingDir: string,
-    signal?: AbortSignal,
-  ): DesktopPnpmHandle {
-    return this.startPlugin(validatedExternalMarketArgv(argv), invokingDir, signal)
   }
 
   private startPlugin(argv: readonly string[], invokingDir: string, signal?: AbortSignal): DesktopPnpmHandle {

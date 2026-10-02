@@ -19,7 +19,7 @@ DSH Desktop 是一个本地优先的开源桌面应用。本政策说明 DSH Des
 - `https://www.dshdesktop.cn/` 下的官方网页、版本检查和下载跳转服务；
 - 您主动发送给项目维护团队的隐私请求、支持邮件或问题报告。
 
-第三方 Fork、自行修改的构建、第三方分发渠道、模型服务商、插件、插件市场来源及软件包服务各自的处理行为不由本政策控制。如果第三方构建仍访问硬编码的 `dshdesktop.cn` 官方端点，本政策仍适用于该官方端点实际收到的信息，但不适用于第三方构建或分发者的其他处理行为。
+第三方 Fork、自行修改的构建、第三方分发渠道、模型服务商、插件及软件包服务各自的处理行为不由本政策控制。如果第三方构建仍访问硬编码的 `dshdesktop.cn` 官方端点，本政策仍适用于该官方端点实际收到的信息，但不适用于第三方构建或分发者的其他处理行为。
 
 ## 2. 摘要
 
@@ -28,7 +28,7 @@ DSH Desktop 是一个本地优先的开源桌面应用。本政策说明 DSH Des
 - 打包后的 macOS 和 Windows 版本默认会检查更新，并发送一个本地随机生成、持续保存的安装 UUID。该 UUID 是伪匿名标识，可能依法构成个人信息；它不是硬件 ID，也不保证一台机器只有一个值。
 - 安装包下载不附带上述安装 UUID，但官网、下载承载方和网络基础设施仍会看到通常的网络元数据。
 - 诊断包只在您主动导出时在本地创建，不会由 DSH Desktop 自动上传。
-- 您选择的模型服务、插件、插件市场来源和软件包服务会按照各自规则处理信息；它们不因出现在 DSH Desktop 中而受本政策约束。
+- 您选择的模型服务、插件和软件包服务会按照各自规则处理信息；它们不因出现在 DSH Desktop 中而受本政策约束。
 
 ## 3. 官方版本检查
 
@@ -100,7 +100,7 @@ GET https://www.dshdesktop.cn/api/desktop/version
 
 | 本地信息 | 用途和保留方式 |
 | --- | --- |
-| Profile、Desktop 设置、窗口设置、插件配置和市场来源选择 | 提供您配置的本地体验；持续到您在应用中删除、手动删除相应数据或重置应用数据。 |
+| Profile、Desktop 设置、窗口设置和插件配置 | 提供您配置的本地体验；持续到您在应用中删除、手动删除相应数据或重置应用数据。 |
 | 会话、提示词、回复、工具记录和工作区信息 | 用于本地 DSH 功能。默认会话记录位于 `$DSH_HOME/sessions`；当前持久化后端没有删除 API，会持续累积到您从外部删除。调用模型或工具时，相应内容可能发送给您选择的服务，见第 6 节。 |
 | 附件和图片缓存 | 默认位于 `$DSH_HOME/attachments/v1`。当前没有基于引用的垃圾回收，会持续保留到您手动删除。 |
 | 模型和服务凭据 | 可来自继承的环境、项目 `.env`、`$DSH_HOME/.env` 或 `$DSH_HOME/.credentials.yaml`。受管 YAML 在支持 POSIX 权限的平台使用 `0600` 文件和 `0700` 目录，但不会加密；以同一操作系统用户运行的工具或模型可以刻意读取它。 |
@@ -126,38 +126,17 @@ DSH Desktop 是可组合的插件平台。下列传输由您选择的服务、�
 
 默认组合还提供 DeepSeek `web_search`。当您主动使用该工具时，它会向配置的 DeepSeek Messages 端点发送 API Key、原始搜索词（嵌入固定提示中）、模型、token/使用次数限制和标准请求元数据；网页 `fetch` 工具默认关闭。
 
-### 6.2 Community Market 与软件包服务
+### 6.2 软件包服务
 
-Community Market 默认不需要选中远程来源。选择并使用来源后，Host 会向该来源发起请求。当前内置的可选来源包括：
+当您预览或确认安装插件时，Desktop 可能访问 `registry.npmjs.org`、`raw.githubusercontent.com`、GitHub 或您配置的 registry，以获取软件包名称、版本、manifest、仓库/commit 证据及依赖。启动时如需补全 Profile 依赖，内置包管理器也可能访问 npm、GitHub、依赖提供方或 Electron 下载服务。安装后的插件及其依赖以您的本地权限运行，可能自行读取本地数据或联网；“可安装”状态不代表隐私或安全审核。
 
-- DSH 1024Store：`deepseek1024.com`；
-- dshfind：`api.dshfind.com`；
-- 您自行配置并确认的标准目录来源。
-
-这些来源会看到 IP 地址、时间、固定的 Market User-Agent 和请求的目录资源。依据所选来源支持的能力，请求还可能包含搜索关键词、分类、排序、语言、分页或游标。插件图片可能由 Desktop Host 代为从目录来源、GitHub 或其允许的图片主机获取，因此接收方可能推断您正在浏览的插件或发布者。
-
-当您预览或确认安装插件时，Desktop 还可能访问 `registry.npmjs.org`、`raw.githubusercontent.com`、GitHub 或您配置的 registry，以获取软件包名称、版本、manifest、仓库/commit 证据及依赖。启动时如需补全 Profile 依赖，内置包管理器也可能访问 npm、GitHub、依赖提供方或 Electron 下载服务。安装后的插件及其依赖以您的本地权限运行，可能自行读取本地数据或联网；目录收录和“可安装”状态都不代表隐私或安全审核。
-
-### 6.3 dsh-market
-
-如果您在 Setup 或设置中选择 `dsh-market`，打开市场、检查更新或查看插件内容时，它可能访问 `awesome-dsh-plugin.com`、npm Registry、GitHub API、`raw.githubusercontent.com`、GitHub 头像服务和 `images.weserv.nl`。这些接收方会看到 IP 地址、时间、请求资源和相关的插件、软件包或仓库标识；图片代理还会收到原始图片 URL。安装或更新仍由您确认，并可能继续访问插件依赖声明的地址。这些请求不会附带 Desktop 的 `X-DSH-Desktop-Installation-Id`。
-
-`dsh-market` 还提供由您手动触发，或在您明确启用可选自动备份后触发的 Profile 备份：
-
-- 本地导出只在本机生成文件；
-- WebDAV 上传始终发送完整备份。自动备份默认关闭；启用后，满足其 24 小时间隔条件时会自动上传。URL、用户名、自动备份设置和上次成功时间保存在浏览器 localStorage；密码从输入后保存在当前 renderer 内存，直到组件卸载或页面刷新，并只为每次请求临时发送给本地 Host；`dsh-market` 不把密码写入 localStorage 或磁盘；
-- GitHub Gist 备份会把 GitHub token 用于 `api.github.com` 验证、创建、更新或读取 secret Gist。Secret Gist 不会公开列出，但任何获得链接的人都可以读取。手工 token 只保存在当前会话内存中，也可使用 `DSH_GITHUB_TOKEN` 或本机已登录的 `gh`；Gist ID 和 WebDAV 地址/用户名可能保存在浏览器本地存储中；
-- 完整备份包含 `package.json` 和 Profile 配置文件，不包含 `node_modules`、lockfile 或 Market 缓存，但可能原样包含 `config.toml`、`.env`、API Key、token 或其他秘密。本地和 WebDAV 导出始终使用完整备份；只有 Gist 导出可以只选插件，并由您决定是否包含配置。
-
-只应向您信任的 WebDAV 或 GitHub 账户上传备份；相应服务按其政策处理备份、凭据和网络元数据。
-
-### 6.4 可选的上游遥测
+### 6.3 可选的上游遥测
 
 上游 DSH session telemetry 在 Desktop 默认组合中沿用上游默认的 `FEEDBACK_ONLY`：日常使用不会上传会话内容；只有您在会话中明确提交反馈后，该会话截至反馈时的原始日志才会与上游匿名用户 ID（保存在 DSH 数据目录的 `.anonymous-user-id`，删除即重置）一起发送到 `https://dsh-otel-collector.deepseeksvc.com/v1/logs` 或您配置的 `DSH_TELEMETRY_OTLP_URL`。如果您或部署者显式设置 `DSH_TELEMETRY_MODE` 为 `FULL`，会话遥测会在日常使用中持续发送；设置任意非空的 `DSH_TELEMETRY_DISABLED` 会让 Desktop 关闭该组件。该处理由上游配置和接收方政策决定，不属于 Anywhere Labs 官方更新服务。
 
 上游还为名为 `desktop` 的 Profile 提供 Desktop 产品使用统计（`product-analytics` 和 `desktop-product-telemetry`），会把设备 ID、登录 DeepSeek 账号后的用户 ID、系统和应用版本以及界面操作事件发送给 DeepSeek。DSH Desktop 在启动时关闭这两项，官方版本不会发送这类统计。
 
-### 6.5 外部链接
+### 6.4 外部链接
 
 应用或文档中的外部 HTTP、HTTPS 和邮件链接会交给系统浏览器或邮件客户端。打开链接后，相应网站或服务的政策适用。
 

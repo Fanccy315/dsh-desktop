@@ -80,22 +80,6 @@ export const DESKTOP_PROFILE_ROOT = 'cordis.yml'
 const BIN_NAME = DESKTOP_PACKAGE_NAME
 const REQUIRED_BUNDLES = requiredWebBundles()
 const REQUIRED_BUNDLE_SET = new Set(REQUIRED_BUNDLES)
-// Retired desktop capabilities: the community market, the bundled dshmarket
-// runtime, and the Agents Anywhere bridge. Profiles that still list them are
-// silently healed, and any Loader row they once injected is stripped.
-const OBSOLETE_DESKTOP_BUNDLE_SET = new Set([
-  '@deepseek-ai/dsh-desktop-app',
-  'dsh-community-market',
-  'dshmarket',
-  '@agents-anywhere/dsh-bridge-next',
-])
-/** Loader row ids and package names owned by the retired market/AA bundles. */
-const RETIRED_PROVIDER_ROW_IDS: ReadonlySet<string> = new Set([
-  'community-market',
-  'dsh-market',
-  'agents-anywhere-bridge-next',
-])
-const RETIRED_PROVIDER_PACKAGES: ReadonlySet<string> = OBSOLETE_DESKTOP_BUNDLE_SET
 // Electron's patched fs/module APIs read this logical ASAR path directly. The
 // Desktop resolver bridges out-of-tree Profile plugins back into this virtual
 // installation without materializing an incomplete ESM-only proxy tree.
@@ -692,8 +676,7 @@ export interface SkippedOptionalEntry {
  */
 export function desktopBundleList(current: readonly string[]): string[] {
   const thirdParty = current.filter(name => !REQUIRED_BUNDLE_SET.has(name)
-    && !DESKTOP_PACKAGE_NAMES.has(name)
-    && !OBSOLETE_DESKTOP_BUNDLE_SET.has(name))
+    && !DESKTOP_PACKAGE_NAMES.has(name))
   return [...REQUIRED_BUNDLES, ...thirdParty]
 }
 
@@ -838,7 +821,6 @@ function profileDependencyMigrationRequired(
 /**
  * Load a profile while resolving disabled third-party bundles only after they have been filtered.
  * Every direct bundle uses the same Desktop/Profile SemVer overlay that Loader imports use.
- * Retired market/AA bundles are skipped so healed-yet-unwritten manifests still boot.
  */
 function loadRecoveryFilteredProfile(
   profileName: string,
@@ -863,7 +845,6 @@ function loadRecoveryFilteredProfile(
   const installPackageUrl = pathToFileURL(INSTALL_ANCHOR).href
   const profilePackageUrl = pathToFileURL(join(profileDir, 'package.json')).href
   for (const packageName of bundles) {
-    if (OBSOLETE_DESKTOP_BUNDLE_SET.has(packageName)) continue
     if (desktopPluginBundleMutable(packageName) && disabledBundles.has(packageName)) continue
     const packageDir = resolveOverlayPackage(packageName, {
       installPackageUrl,
@@ -1022,43 +1003,6 @@ function omitUnresolvedOptionalEntries(
   }
 }
 
-/** Return whether one Loader row claims a retired market/AA identity. */
-function isRetiredProviderEntry(entry: { readonly id?: unknown, readonly name?: unknown }): boolean {
-  return (typeof entry.id === 'string' && RETIRED_PROVIDER_ROW_IDS.has(entry.id))
-    || (typeof entry.name === 'string' && (RETIRED_PROVIDER_PACKAGES.has(entry.name)
-      || entry.name.startsWith('@agents-anywhere/dsh-bridge-next/')))
-}
-
-/** Remove retired provider rows recursively before a stale user patch can re-activate them. */
-function filterRetiredProviderRows(rows: EntryOptions[]): EntryOptions[] {
-  const filtered: EntryOptions[] = []
-  for (const row of rows) {
-    if (isRetiredProviderEntry(row)) continue
-    if (row.group === true && Array.isArray(row.config)) {
-      const nested = filterRetiredProviderRows(row.config)
-      filtered.push(nested.length === row.config.length ? row : { ...row, config: nested })
-    } else {
-      filtered.push(row)
-    }
-  }
-  return filtered
-}
-
-/** Strip retired provider inserts and overrides from every patch layer. */
-function filterRetiredProviderPatches(patches: PatchOptions[]): PatchOptions[] {
-  const filtered: PatchOptions[] = []
-  for (const patch of patches) {
-    if (isRetiredProviderEntry(patch)) continue
-    if (Array.isArray(patch.insert)) {
-      const insert = filterRetiredProviderRows(patch.insert)
-      filtered.push(insert.length === patch.insert.length ? patch : { ...patch, insert })
-    } else {
-      filtered.push(patch)
-    }
-  }
-  return filtered
-}
-
 /**
  * Read the Desktop machine-wide patch without relaxing upstream patch parsing.
  *
@@ -1155,11 +1099,11 @@ export function prepareDesktopProfile(
     loadedHomePatches,
     bareModuleBaseUrl,
   )
-  const patches: PatchOptions[] = filterRetiredProviderPatches([
+  const patches: PatchOptions[] = [
     ...bundlePatches,
     ...profile.patches,
     ...homePatches,
-  ])
+  ]
   const composedRows = composeEntries([patches])
   assertUniqueEntryIds(composedRows)
   const rows = new Map<string, EntryOptions>()

@@ -1,6 +1,6 @@
 /** Independent Desktop frame portalled above the upstream content viewport. */
 
-import { LayoutTemplate, PanelTop, RefreshCw, Sparkles } from 'lucide-react'
+import { LayoutTemplate, PanelTop, Sparkles } from 'lucide-react'
 import { useState } from 'react'
 import type { DesktopSettingsApi } from './desktop-settings-api.ts'
 import type { DesktopClientEnvironment, DesktopClientMode } from './environment.ts'
@@ -17,30 +17,18 @@ export interface DesktopFrameTitlebarInjected {
   readonly environment: DesktopClientEnvironment
   readonly api: Pick<
     DesktopSettingsApi,
-    'openTerminal' | 'restart' | 'restartToRecovery' | 'reloadRenderer' | 'toggleDeveloperTools' | 'checkForUpdates'
+    'openTerminal' | 'restart' | 'restartToRecovery' | 'reloadRenderer' | 'toggleDeveloperTools'
   >
   readonly setMode: (mode: DesktopClientMode) => Promise<void>
 }
 
 export function DesktopVersionControl({
   version,
-  checkForUpdates,
   t,
 }: {
   readonly version: string
-  readonly checkForUpdates: () => Promise<void>
   readonly t: (key: DesktopSettingsLocaleKey) => string
 }) {
-  const [checking, setChecking] = useState(false)
-  const [failed, setFailed] = useState(false)
-  const runCheck = (): void => {
-    if (checking) return
-    setChecking(true)
-    setFailed(false)
-    void checkForUpdates()
-      .catch(() => { setFailed(true) })
-      .finally(() => { setChecking(false) })
-  }
   const visibleVersion = `v${version}`
   return (
     <HoverCard>
@@ -57,17 +45,6 @@ export function DesktopVersionControl({
           <span>{t('currentVersion')}</span>
           <strong>{visibleVersion}</strong>
         </div>
-        <Button
-          className="dshDesktopVersionCheckButton"
-          disabled={checking}
-          size="sm"
-          variant="outline"
-          onClick={runCheck}
-        >
-          <RefreshCw aria-hidden="true" />
-          <span>{t(checking ? 'checkingForUpdates' : 'checkForUpdates')}</span>
-        </Button>
-        {failed && <span className="dshDesktopVersionCheckError" role="alert">{t('checkForUpdatesError')}</span>}
       </HoverCardContent>
     </HoverCard>
   )
@@ -174,7 +151,7 @@ export function DesktopFrameTitlebarView({ api, environment, setMode, t }: Deskt
     >
       <div className="dshDesktopFrameIdentity">
         <span className="dshDesktopFrameProduct">DSH Desktop</span>
-        <DesktopVersionControl version={environment.version} checkForUpdates={api.checkForUpdates} t={t} />
+        <DesktopVersionControl version={environment.version} t={t} />
         <DesktopModeControl
           mode={environment.mode}
           setMode={setMode}

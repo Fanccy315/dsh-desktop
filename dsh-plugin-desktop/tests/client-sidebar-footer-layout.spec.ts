@@ -7,7 +7,7 @@ function renderFooterContract(wide: boolean) {
     createElement('div', { className: 'footArea' },
       createElement('div', { className: 'footerActions' },
         createElement('div', { 'data-slot': 'sidebar.footer.action', style: { display: 'contents' } },
-          ['market', 'plugins', 'updates'].map(id => createElement('button', {
+          ['workspace', 'plugins', 'updates'].map(id => createElement('button', {
             key: id,
             type: 'button',
             'data-entry': id,
@@ -34,8 +34,8 @@ describe('desktop sidebar footer reproduction', () => {
     expect(markup).toContain('class="footerActions"')
     expect(markup).toContain('data-slot="sidebar.footer.action"')
     expect(markup).toContain('style="display:contents"')
-    expect(Array.from(markup.matchAll(/data-entry="([^"]+)"/g), match => match[1])).toEqual(['market', 'plugins', 'updates'])
-    expect(markup).toContain('Footer market')
+    expect(Array.from(markup.matchAll(/data-entry="([^"]+)"/g), match => match[1])).toEqual(['workspace', 'plugins', 'updates'])
+    expect(markup).toContain('Footer workspace')
     expect(markup).toContain('Footer plugins')
     expect(markup).toContain('Footer updates')
     expect(markup).toContain('data-seat="settings"')
@@ -44,9 +44,9 @@ describe('desktop sidebar footer reproduction', () => {
 
   it('keeps the same three deterministic entries in the collapsed rail contract', () => {
     const markup = renderFooterContract(false)
-    expect(Array.from(markup.matchAll(/data-entry="([^"]+)"/g), match => match[1])).toEqual(['market', 'plugins', 'updates'])
+    expect(Array.from(markup.matchAll(/data-entry="([^"]+)"/g), match => match[1])).toEqual(['workspace', 'plugins', 'updates'])
     expect(Array.from(markup.matchAll(/data-wide="false"/g))).toHaveLength(4)
-    expect(markup).toContain('>M<')
+    expect(markup).toContain('>W<')
     expect(markup).toContain('>P<')
     expect(markup).toContain('>U<')
     expect(markup).toContain('>S<')

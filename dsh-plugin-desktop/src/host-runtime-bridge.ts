@@ -1,16 +1,11 @@
 /** Native capability adapters; frontend HTTP and WebSocket connections are unchanged. */
-import type { DesktopLocale, DesktopRuntime, DesktopShellSpec, DesktopTrayItem, DesktopTrayItemRegistration, DesktopUpdateAdapter } from './runtime.ts'
+import type { DesktopLocale, DesktopRuntime, DesktopShellSpec, DesktopTrayItem, DesktopTrayItemRegistration } from './runtime.ts'
 import { HostRpc } from './host-rpc.ts'
 import { parseDesktopPlatformLoginRequest } from './platform-login.ts'
 
-export type RuntimeSnapshot = Pick<DesktopRuntime, 'platform' | 'locale'> & {
-  updates: Omit<DesktopUpdateAdapter, 'request' | 'confirmDownload' | 'showManualCheckResult' | 'downloadAndOpen' | 'notify'>
-}
+export type RuntimeSnapshot = Pick<DesktopRuntime, 'platform' | 'locale'>
 export function runtimeSnapshot(runtime: DesktopRuntime): RuntimeSnapshot {
-  const { isPackaged, canDownload, currentVersion, releaseChannel, statePath, installationId } = runtime.updates
-  return { platform: runtime.platform, locale: runtime.locale,
-    updates: { isPackaged, canDownload, currentVersion, statePath,
-      ...(releaseChannel ? { releaseChannel } : {}), ...(installationId ? { installationId } : {}) } }
+  return { platform: runtime.platform, locale: runtime.locale }
 }
 
 /** Keep functions in their owning process and send snapshots plus opaque callback IDs. */
@@ -24,8 +19,7 @@ export function createHostRuntime(rpc: HostRpc, snapshot: RuntimeSnapshot): Desk
   const trackSetup = (task: Promise<unknown>) => { if (booting) setup.push(task) }
   const shellSpecs = new Map<string, DesktopShellSpec>()
   const send = <T = void>(method: string, args: unknown[] = [], signal?: AbortSignal): Promise<T> => {
-    const interactive = ['update:confirmDownload', 'update:showManualCheckResult', 'update:downloadAndOpen',
-      'native:pickDirectory', 'native:exportDiagnostics'].includes(method)
+    const interactive = ['native:pickDirectory', 'native:exportDiagnostics'].includes(method)
     const task = rpc.call<T>(method, args, signal, interactive ? 0 : undefined)
     calls.add(task)
     // Report fire-and-forget failures without creating an unhandled rejection.
@@ -49,19 +43,6 @@ export function createHostRuntime(rpc: HostRpc, snapshot: RuntimeSnapshot): Desk
   const runtime: DesktopRuntime = {
     platform: snapshot.platform,
     get locale() { return locale },
-    updates: {
-      ...snapshot.updates,
-      request: async (url, init) => {
-        const { signal, ...options } = init
-        const response = await send<{ body: string; status: number; headers: [string, string][] }>('update:request',
-          [url, { ...options, headers: [...new Headers(init.headers).entries()] }], signal ?? undefined)
-        return new Response([204, 205, 304].includes(response.status) ? null : response.body, { status: response.status, headers: response.headers })
-      },
-      confirmDownload: (version, channel) => send('update:confirmDownload', [version, channel]),
-      showManualCheckResult: result => send('update:showManualCheckResult', [result]),
-      downloadAndOpen: (version, signal, channel) => send('update:downloadAndOpen', [version, channel], signal),
-      notify: notification => { void send('update:notify', [notification]) },
-    },
     schedule(spec) {
       const callback = callbacks({ quit: spec.requestQuit, mode: spec.requestModeChange,
         ...(spec.applySetupSettings ? { setup: spec.applySetupSettings } : {}),
@@ -94,7 +75,7 @@ export function createHostRuntime(rpc: HostRpc, snapshot: RuntimeSnapshot): Desk
           return { label: entry.label(), enabled: entry.enabled?.() ?? true,
             checked: 'checked' in entry ? entry.checked?.() ?? false : false, type: 'type' in entry ? entry.type : undefined, method }
         }
-        const task = send<void>('tray:set', [id, { ...project(item, -1), group: item.group, order: item.order, id: item.id,
+        const task = send<void>('tray:set', [id, { ...project(item, -1), group: item.group, order: item.order,
           submenu: item.submenu?.().map((entry, index) => project(entry, index)) }])
         trackSetup(task)
         return task
@@ -183,14 +164,6 @@ export function bindNativeRuntime(rpc: HostRpc, runtime: DesktopRuntime): () => 
     trays.set(id, runtime.registerTrayItem({ ...project(data), submenu: data.submenu ? () => data.submenu.map(project) : undefined }))
   })
   handle('tray:dispose', ([id]) => { trays.get(id)?.dispose(); trays.delete(id) })
-  handle('update:request', async ([url, init], signal) => {
-    const response = await runtime.updates.request(url, { ...init, signal })
-    return { body: await response.text(), status: response.status, headers: [...response.headers.entries()] }
-  })
-  handle('update:confirmDownload', ([version, channel]) => runtime.updates.confirmDownload(version, channel))
-  handle('update:showManualCheckResult', ([result]) => runtime.updates.showManualCheckResult(result))
-  handle('update:downloadAndOpen', ([version, channel], signal) => runtime.updates.downloadAndOpen(version, signal, channel))
-  handle('update:notify', ([value]) => runtime.updates.notify(value))
   return async () => {
     trays.forEach(tray => tray.dispose()); trays.clear()
     await Promise.all([...shells.values()].map(dispose => dispose())); shells.clear(); preferences.clear()

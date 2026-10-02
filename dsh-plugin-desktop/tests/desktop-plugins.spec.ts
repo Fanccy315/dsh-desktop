@@ -141,8 +141,6 @@ describe('desktop direct bundle management', () => {
       expect.objectContaining({ status: 'active', mutable: false }),
     )
     expect(desktopPluginBundleMutable('dsh-plugin-desktop')).toBe(false)
-    expect(desktopPluginBundleMutable('dsh-plugin-desktop-beta')).toBe(false)
-    expect(desktopPluginBundleMutable('dsh-community-market')).toBe(true)
     expect(desktopPluginBundleMutable('../third-party-plugin')).toBe(false)
     expect(desktopPluginBundleMutable('Third-Party-Plugin')).toBe(false)
     await harness.dispose()
@@ -590,7 +588,7 @@ describe('pre-Host Profile bundle selection', () => {
       uninstallable: true,
       deselected: true,
     })
-    // The market-facing inventory never grows a row for a deselected name.
+    // The plugin inventory never grows a row for a deselected name.
     expect(readDesktopProfileBundleInventory(options)
       .some(item => item.packageName === 'third-party-plugin')).toBe(false)
 

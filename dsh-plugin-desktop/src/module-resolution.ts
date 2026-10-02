@@ -363,8 +363,8 @@ function selectedOverlayCandidate(
     installPackageUrl: DESKTOP_PACKAGE_URL,
     profilePackageUrl: registration.profileBaseUrl,
   })
-  // Missing packages are intentionally not cached: Market/HMR can publish one
-  // while this process is alive.
+  // Missing packages are intentionally not cached: plugin installs and HMR can
+  // publish one while this process is alive.
   if (overlay === undefined) throw new PackageOverlayNotFoundError(packageName)
   let selected = overlay.selected
   if (overlay.selected.source === 'profile'

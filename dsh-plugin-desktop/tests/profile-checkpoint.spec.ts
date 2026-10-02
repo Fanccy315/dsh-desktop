@@ -46,7 +46,7 @@ function fixture(options: Partial<ProfileCheckpointOptions> = {}): {
     profileDir: profile,
     homeDir: home,
     profileName: 'work',
-    provider: 'dsh-market',
+    provider: 'desktop-profile',
     appVersion: '2.0.3',
     desktopPackageName: 'dsh-plugin-desktop',
     releaseChannel: 'stable',
@@ -75,7 +75,7 @@ describe('Desktop profile health checkpoints', () => {
         version: 4,
         capturedAt: '2026-08-25T01:02:03.000Z',
         profileName: 'work',
-        provider: 'dsh-market',
+        provider: 'desktop-profile',
         appVersion: '2.0.3',
         desktopPackageName: 'dsh-plugin-desktop',
         releaseChannel: 'stable',
@@ -100,7 +100,6 @@ describe('Desktop profile health checkpoints', () => {
       'pnpm-lock.yaml',
       'pnpm-workspace.yaml',
       'cordis.patch.yml',
-      '.dsh-market/state.json',
       'home/settings.yaml',
       'home/cordis.patch.yml',
     ])
@@ -137,16 +136,13 @@ describe('Desktop profile health checkpoints', () => {
     now += 1_000
     writeFileSync(join(target.profile, 'package.json'), '{"name":"healthy-1"}\n')
     target.checkpoint.captureHealthy()
-    mkdirSync(join(target.profile, '.dsh-market'))
-    writeFileSync(join(target.profile, '.dsh-market', 'state.json'), '{}\n')
 
     expect(target.checkpoint.restoreSlot('slot-1')).toMatchObject({
       status: 'restored',
       slotId: 'slot-1',
-      changedFiles: expect.arrayContaining(['package.json', '.dsh-market/state.json']),
+      changedFiles: expect.arrayContaining(['package.json']),
     })
     expect(readFileSync(join(target.profile, 'package.json'), 'utf8')).toBe('{"name":"healthy-0"}\n')
-    expect(existsSync(join(target.profile, '.dsh-market', 'state.json'))).toBe(false)
 
     now += 1_000
     expect(target.checkpoint.captureHealthy()).toEqual({
@@ -262,13 +258,13 @@ describe('Desktop profile health checkpoints', () => {
       userDataDir: target.userData,
       profileDir: target.profile,
       profileName: 'work',
-      legacyDesktopPackageName: 'dsh-plugin-desktop-beta',
-      legacyReleaseChannel: 'beta',
+      legacyDesktopPackageName: 'dsh-plugin-desktop',
+      legacyReleaseChannel: 'stable',
     })).toMatchObject({
       status: 'valid',
       evidence: {
-        desktopPackageName: 'dsh-plugin-desktop-beta',
-        releaseChannel: 'beta',
+        desktopPackageName: 'dsh-plugin-desktop',
+        releaseChannel: 'stable',
         desktopVersion: '2.0.3',
       },
     })
@@ -282,11 +278,11 @@ describe('Desktop profile health checkpoints', () => {
       userDataDir: target.userData,
       profileDir: target.profile,
       profileName: 'work',
-      legacyDesktopPackageName: 'dsh-plugin-desktop-beta',
-      legacyReleaseChannel: 'beta',
+      legacyDesktopPackageName: 'dsh-plugin-desktop',
+      legacyReleaseChannel: 'stable',
     })).toMatchObject({
       status: 'valid',
-      evidence: { releaseChannel: 'beta', desktopVersion: '2.0.3' },
+      evidence: { releaseChannel: 'stable', desktopVersion: '2.0.3' },
     })
 
     writeFileSync(manifestPath, '{broken')
@@ -294,8 +290,8 @@ describe('Desktop profile health checkpoints', () => {
       userDataDir: target.userData,
       profileDir: target.profile,
       profileName: 'work',
-      legacyDesktopPackageName: 'dsh-plugin-desktop-beta',
-      legacyReleaseChannel: 'beta',
+      legacyDesktopPackageName: 'dsh-plugin-desktop',
+      legacyReleaseChannel: 'stable',
     })).toMatchObject({ status: 'invalid' })
   })
 
@@ -306,8 +302,8 @@ describe('Desktop profile health checkpoints', () => {
       userDataDir: missing,
       profileDir: target.profile,
       profileName: 'work',
-      legacyDesktopPackageName: 'dsh-plugin-desktop-beta',
-      legacyReleaseChannel: 'beta',
+      legacyDesktopPackageName: 'dsh-plugin-desktop',
+      legacyReleaseChannel: 'stable',
     })).toEqual({ status: 'none' })
     expect(existsSync(missing)).toBe(false)
   })
@@ -344,7 +340,7 @@ describe('Desktop profile health checkpoints', () => {
     })
   })
 
-  it('keeps slots browseable when the current Market provider changes', () => {
+  it('keeps slots browseable when the current checkpoint provider changes', () => {
     const target = fixture()
     target.checkpoint.captureHealthy()
     const reopened = new DesktopProfileCheckpoint({
@@ -352,7 +348,7 @@ describe('Desktop profile health checkpoints', () => {
       profileDir: target.profile,
       homeDir: target.home,
       profileName: 'work',
-      provider: 'other-market',
+      provider: 'other-profile',
       appVersion: '2.0.3',
       desktopPackageName: 'dsh-plugin-desktop',
       releaseChannel: 'stable',
@@ -360,7 +356,7 @@ describe('Desktop profile health checkpoints', () => {
     })
     expect(reopened.listSlots()[0]).toMatchObject({
       snapshotExists: true,
-      manifest: { provider: 'dsh-market' },
+      manifest: { provider: 'desktop-profile' },
     })
   })
 

@@ -11,8 +11,10 @@ import { formatUnexpectedHostExit, startIsolatedDesktopHost } from './host-proce
 import { app, crashReporter, safeStorage, session, shell } from 'electron'
 import { randomUUID } from 'node:crypto'
 import { existsSync } from 'node:fs'
-import { dirname, join } from 'node:path'
+import { homedir } from 'node:os'
+import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { resolveDshHome } from '@deepseek-ai/dsh-home-paths'
 import {
   boot,
   installFailLoud,
@@ -38,8 +40,8 @@ import {
   installDesktopDshRuntime,
   installDesktopPnpmRuntime,
 } from './desktop-runtime-environment.ts'
-import { desktopProductVersion, ElectronDesktopRuntime } from './electron-runtime.ts'
-import { getOrCreateDesktopInstallationId } from './desktop-installation-id.ts'
+import { ElectronDesktopRuntime } from './electron-runtime.ts'
+import { desktopProductVersion } from './product-identity.ts'
 import {
   createDesktopFailLoudProcess,
   describeDesktopChildProcess,
@@ -160,12 +162,9 @@ import {
 import { isDesktopSetupWizardInput, desktopSetupWizardSelectionIsAvailable } from './setup-wizard-contract.ts'
 import { ProfileCreateWindow } from './profile-create-window.ts'
 import { DesktopProfileSelectionWindow } from './profile-selection-window.ts'
-import { showDesktopDialog } from './desktop-dialog-window.ts'
 import {
   clearDesktopProfileUsageHistory,
-  desktopReleaseUserDataLocations,
   hasDesktopProfileUsageHistory,
-  inspectDesktopProfileChannelAdmission,
 } from './profile-channel-admission.ts'
 import {
   formatProfileMaterializationFailure,
@@ -218,15 +217,11 @@ import {
 } from './session-projcache-recovery.ts'
 import {
   DESKTOP_APP_ID,
+  DESKTOP_HOME_DIRECTORY_NAME,
   DESKTOP_PACKAGE_NAME,
   DESKTOP_PRODUCT_NAME,
   DESKTOP_RELEASE_CHANNEL,
-  OTHER_DESKTOP_PRODUCT_IDENTITY,
 } from './product-identity.ts'
-import {
-  desktopSharedHomeNoticeRequired,
-  resolveDesktopChannelHome,
-} from './desktop-channel-home.ts'
 import { desktopRecoveryCopy } from './recovery-copy.ts'
 
 const BIN_NAME = DESKTOP_PACKAGE_NAME
@@ -358,7 +353,7 @@ function notifySkippedOptionalEntries(
   const copy = desktopNativeCopy(runtime.locale)
   const names = entries.map(entry => entry.name)
   try {
-    runtime.updates.notify({
+    runtime.notify({
       title: copy.skippedPluginTitle,
       body: copy.skippedPluginBody(names[0]!, names.length - 1),
     })
@@ -390,7 +385,7 @@ function notifyWindowsVolumeConcerns(
           : '某个配置路径'
     : concernLabel ?? 'A configured path'
   try {
-    runtime.updates.notify({
+    runtime.notify({
       title: copy.unsupportedStorageTitle,
       body: copy.unsupportedStorageBody(label),
     })
@@ -405,7 +400,7 @@ function notifySessionProjectionCacheRecovery(
   _recovery: Extract<SessionProjectionCacheRecoveryResult, { status: 'quarantined' }>,
 ): void {
   try {
-    runtime.updates.notify({
+    runtime.notify({
       title: 'Recovered Session Cache',
       body: 'An oversized session projection cache was moved aside and will be rebuilt from session history.',
     })
@@ -421,7 +416,7 @@ function notifyDesktopSafeModeActive(
 ): void {
   const copy = desktopRecoveryCopy(runtime.locale)
   try {
-    runtime.updates.notify({
+    runtime.notify({
       title: copy.safeModeNotificationTitle,
       body: copy.safeModeNotificationBody,
     })
@@ -591,7 +586,6 @@ async function start(): Promise<void> {
     },
   )
   let restartRequested = false
-  const installationId = await getOrCreateDesktopInstallationId(app.getPath('userData'))
   runtime = new ElectronDesktopRuntime(async target => {
     if (shutdown === undefined) {
       throw new Error('dsh-plugin-desktop: shutdown coordinator is not ready')
@@ -620,7 +614,7 @@ async function start(): Promise<void> {
     // Main owns every pre-health failure branch. Returning true prevents the
     // legacy Renderer recovery dialog from racing the native startup window.
     return report.status === 'failed'
-  }, electronLogger, undefined, undefined, installationId)
+  }, electronLogger, undefined, undefined)
   const finalExit = (code: number): void => { nativeExit.finish(code) }
   shutdown = createDesktopShutdown(
     async () => { await generation.release() },
@@ -785,10 +779,10 @@ async function start(): Promise<void> {
     })
     const dshBootstrapPath = fileURLToPath(new URL('./desktop-cli.js', import.meta.url))
     const releasePnpmRuntime = generation.own(() => { pnpmRuntime.dispose() })
-    const channelHomeResolution = resolveDesktopChannelHome()
-    const fallbackHome = channelHomeResolution.homeDir
-    const defaultHome = channelHomeResolution.channelHome
-    const fallbackSource = channelHomeResolution.status === 'explicit' ? 'environment' : 'default'
+    const defaultHome = resolve(join(homedir(), DESKTOP_HOME_DIRECTORY_NAME))
+    const fallbackHome = resolveDshHome(undefined, process.env)
+    const fallbackSource = process.env.DSH_HOME !== undefined && process.env.DSH_HOME.trim().length > 0
+      ? 'environment' : 'default'
     let dataDirectoryLocation: DesktopDataDirectoryLocation | undefined
     let homeDir: string
     if (safeModePaths !== undefined) {
@@ -835,14 +829,9 @@ async function start(): Promise<void> {
     warnWindowsVolumeConcerns(electronLogger, windowsVolumeConcerns)
     const selectionStatePath = join(profileUserDataDir, 'profile-selection', 'state.json')
     const pluginManagementStatePath = join(profileUserDataDir, 'plugin-management', 'state.json')
-    const marketUserDataDir = profileUserDataDir
-    const releaseUserDataLocations = desktopReleaseUserDataLocations(
-      app.getPath('appData'),
-      marketUserDataDir,
-    )
     const createFreshDesktopProfile = (name: string) => {
       const created = createDesktopWebProfile(homeDir, name)
-      clearDesktopProfileUsageHistory(releaseUserDataLocations, created.dir)
+      clearDesktopProfileUsageHistory(profileUserDataDir, created.dir)
       return created
     }
     startupStage = 'profile-selection'
@@ -915,7 +904,7 @@ async function start(): Promise<void> {
     expectedRecoveryProfileName = activeProfileName
     const activeProfileDir = resolveProfileDir(activeProfileName, homeDir)
     if (!profileDirectoriesBeforeStartup.has(activeProfileDir)) {
-      clearDesktopProfileUsageHistory(releaseUserDataLocations, activeProfileDir)
+      clearDesktopProfileUsageHistory(profileUserDataDir, activeProfileDir)
     }
     // Recovery can open before Profile composition and Host boot. Fix the
     // launcher-owned terminal identity as soon as Profile selection succeeds
@@ -947,129 +936,6 @@ async function start(): Promise<void> {
         invoke: () => runtime.requestSafeModeRestart(),
       })
       generation.own(() => { safeModeTray.dispose() })
-    }
-    const openCompatibilityProfileSelector = async (): Promise<'restart' | 'cancel' | 'unavailable'> => {
-      const profileActions = startupRecoveryProfileActions
-      if (profileActions === undefined) return 'unavailable'
-      try {
-        profileSelectionWindow = new DesktopProfileSelectionWindow({ locale, profileActions })
-        return await profileSelectionWindow.run()
-      } catch (cause) {
-        electronLogger.error(
-          `${BIN_NAME}: failed to open Profile selector: ${cause instanceof Error ? cause.message : String(cause)}`,
-        )
-        return 'unavailable'
-      } finally {
-        profileSelectionWindow = undefined
-      }
-    }
-    if (!recoveryModeRequested) {
-      const copy = desktopNativeCopy(locale)
-      // Both releases used to share one DSH home, and with it the installation
-      // module index that each core generation rewrites. Offer the move once per
-      // launch; nothing is copied, so the shared directory keeps working as is.
-      if (dataDirectoryLocation !== undefined
-        && desktopSharedHomeNoticeRequired(channelHomeResolution, dataDirectoryLocation.source)) {
-        const sharedLocation = dataDirectoryLocation
-        const otherProductName = OTHER_DESKTOP_PRODUCT_IDENTITY.productName
-        const result = await showDesktopDialog({
-          type: 'warning',
-          title: copy.sharedDataDirectoryTitle,
-          message: copy.sharedDataDirectoryMessage(PRODUCT_NAME, otherProductName),
-          detail: copy.sharedDataDirectoryDetail(
-            sharedLocation.homeDir,
-            channelHomeResolution.channelHome,
-          ),
-          advisory: copy.sharedDataDirectoryWarning(
-            otherProductName,
-            join(sharedLocation.homeDir, 'sessions'),
-          ),
-          presentation: 'profile-compatibility',
-          buttons: [copy.useChannelDataDirectory, copy.shareDataDirectoryAnyway, copy.quit],
-          defaultId: 0,
-          cancelId: 1,
-        })
-        if (result.response === 2) {
-          await shutdown.request(0)
-          return
-        }
-        if (result.response === 0) {
-          let moved = false
-          const lease = acquireDesktopDataOperationLock(
-            desktopUserDataDir,
-            'move Desktop onto its release-channel data directory',
-          )
-          try {
-            await selectDesktopDataDirectory(
-              desktopUserDataDir,
-              sharedLocation,
-              channelHomeResolution.channelHome,
-              { createIfMissing: true },
-            )
-            moved = true
-          } catch (cause) {
-            electronLogger.error(
-              `${BIN_NAME}: could not select the release-channel data directory: `
-                + `${cause instanceof Error ? cause.message : String(cause)}`,
-            )
-          } finally {
-            lease.release()
-          }
-          if (moved) {
-            nativeExit.requestRelaunch()
-            await shutdown.request(0)
-            return
-          }
-          await showDesktopDialog({
-            type: 'error',
-            title: copy.sharedDataDirectoryTitle,
-            message: copy.sharedDataDirectoryFailed,
-            buttons: [copy.ok],
-            defaultId: 0,
-            cancelId: 0,
-          })
-        }
-      }
-      while (true) {
-        const admission = inspectDesktopProfileChannelAdmission(
-          releaseUserDataLocations,
-          activeProfileDir,
-          activeProfileName,
-        )
-        if (admission.status === 'allow') break
-        const previous = admission.reason === 'other-channel-latest'
-          ? admission.previous
-          : undefined
-        const result = await showDesktopDialog({
-          type: 'warning',
-          title: copy.profileCompatibilityTitle,
-          message: copy.profileCompatibilityMessage(activeProfileName, previous?.productName),
-          detail: previous === undefined
-            ? copy.profileCompatibilityUnknownDetail(PRODUCT_NAME, appVersion, currentDshVersion)
-            : copy.profileCompatibilityDetail(
-                previous.desktopVersion,
-                previous.dshVersion ?? copy.unknownVersion,
-                PRODUCT_NAME,
-                appVersion,
-                currentDshVersion,
-              ),
-          advisory: copy.profileCompatibilityWarning,
-          presentation: 'profile-compatibility',
-          buttons: [copy.switchProfile, copy.useProfileAnyway, copy.quit],
-          defaultId: 0,
-          cancelId: 2,
-        })
-        if (result.response === 1) break
-        if (result.response === 2) {
-          await shutdown.request(0)
-          return
-        }
-        const selectionResult = await openCompatibilityProfileSelector()
-        if (selectionResult !== 'restart') continue
-        nativeExit.requestRelaunch()
-        await shutdown.request(0)
-        return
-      }
     }
     try {
       profileCheckpoint = new DesktopProfileCheckpoint({
@@ -1172,7 +1038,7 @@ async function start(): Promise<void> {
           try {
             await resetDesktopDataDirectory({
               homeDir: recoveryDataLocation.homeDir,
-              userDataDir: marketUserDataDir,
+              userDataDir: profileUserDataDir,
               protectedPaths: [
                 app.getPath('home'),
                 app.getPath('appData'),
@@ -1181,7 +1047,7 @@ async function start(): Promise<void> {
                 process.cwd(),
               ],
               trashItem: async path => { await shell.trashItem(path) },
-              clearProfileUsageHistory: profileDir => { clearDesktopProfileUsageHistory(releaseUserDataLocations, profileDir) },
+              clearProfileUsageHistory: profileDir => { clearDesktopProfileUsageHistory(profileUserDataDir, profileDir) },
             })
           } finally {
             lease.release()
@@ -1276,7 +1142,7 @@ async function start(): Promise<void> {
     startupStage = 'profile-composition'
     lifecycleRecorder.transitionStartupStage(startupStage)
     const lanAddresses = desktopLanAddresses()
-    let profilePreferences = readDesktopProfilePreferences(marketUserDataDir, activeProfileDir)
+    let profilePreferences = readDesktopProfilePreferences(profileUserDataDir, activeProfileDir)
     const preparationHooks = {
       lanAddresses,
       onSettingsDocumentResolved: (settingsDocument: string) => {
@@ -1323,7 +1189,7 @@ async function start(): Promise<void> {
       const safeModeDefaults = DESKTOP_SAFE_MODE_DEFAULTS
       await updateDesktopSetupWizardSettings(prepared.settingsDocument, safeModeDefaults.settings)
       profilePreferences = await writeDesktopProfilePreferences(
-        marketUserDataDir,
+        profileUserDataDir,
         prepared.profile.dir,
         desktopProfilePreferencesFromSettings(
           safeModeDefaults.settings,
@@ -1363,7 +1229,7 @@ async function start(): Promise<void> {
       }
       const importedSettings = readDesktopSetupWizardSettings(prepared.settingsDocument)
       profilePreferences = await writeDesktopProfilePreferences(
-        marketUserDataDir,
+        profileUserDataDir,
         prepared.profile.dir,
         desktopProfilePreferencesFromSettings(
           prepared,
@@ -1395,12 +1261,12 @@ async function start(): Promise<void> {
     // Desktop setup has its own per-Profile trigger, independent of account state.
     // The official page checks that trigger before showing its own account flow.
     const setupWizardState = safeModePaths === undefined
-      ? readDesktopSetupWizardState(marketUserDataDir, prepared.profile.dir) : undefined
+      ? readDesktopSetupWizardState(profileUserDataDir, prepared.profile.dir) : undefined
     let setupPending = safeModePaths === undefined
       && desktopSetupWizardRequired(setupWizardState, setupWizardVersions)
-      && (desktopSetupWizardPending(marketUserDataDir, prepared.profile.dir)
-        || !hasDesktopProfileUsageHistory(releaseUserDataLocations, prepared.profile.dir, activeProfileName))
-    if (setupPending) await beginDesktopSetupWizard(marketUserDataDir, prepared.profile.dir)
+      && (desktopSetupWizardPending(profileUserDataDir, prepared.profile.dir)
+        || !hasDesktopProfileUsageHistory(profileUserDataDir, prepared.profile.dir, activeProfileName))
+    if (setupPending) await beginDesktopSetupWizard(profileUserDataDir, prepared.profile.dir)
     const setupInput = { ...readDesktopSetupWizardSettings(prepared.settingsDocument), appVersion,
       profileName: activeProfileName, platform: runtime.platform }
     let setupSaving = false
@@ -1408,15 +1274,15 @@ async function start(): Promise<void> {
     runtime.setupOnboarding = {
       read: async () => ({ required: setupPending, edition: 'desktop', profile: activeProfileName,
         restartPending: setupRestartPending,
-        accountPending: safeModePaths === undefined && !setupPending && desktopSetupAccountPending(marketUserDataDir, prepared.profile.dir),
+        accountPending: safeModePaths === undefined && !setupPending && desktopSetupAccountPending(profileUserDataDir, prepared.profile.dir),
         input: setupInput }),
       dismissAccount: async profile => {
         if (setupPending || profile !== activeProfileName || safeModePaths !== undefined) throw new Error('Desktop account setup is unavailable')
-        dismissDesktopSetupAccount(marketUserDataDir, prepared.profile.dir)
+        dismissDesktopSetupAccount(profileUserDataDir, prepared.profile.dir)
       },
       applyPending: async profile => {
         if (setupPending || setupSaving || profile !== activeProfileName || safeModePaths !== undefined
-          || desktopSetupAccountPending(marketUserDataDir, prepared.profile.dir)) throw new Error('Desktop settings are not ready to apply')
+          || desktopSetupAccountPending(profileUserDataDir, prepared.profile.dir)) throw new Error('Desktop settings are not ready to apply')
         if (!setupRestartPending) return
         setupRestartPending = false
         setImmediate(() => {
@@ -1436,7 +1302,7 @@ async function start(): Promise<void> {
         setupSaving = true
         try {
           if (selection !== undefined) {
-            profilePreferences = await writeDesktopProfilePreferences(marketUserDataDir, prepared.profile.dir,
+            profilePreferences = await writeDesktopProfilePreferences(profileUserDataDir, prepared.profile.dir,
               desktopProfilePreferencesFromSettings(selection, selection.notifications))
             // A new Profile has no settings document left to import, so save
             // through the live settings scopes the way the mode picker does.
@@ -1450,7 +1316,7 @@ async function start(): Promise<void> {
             }))
           }
           // Keep the existing per-Profile marker; a failed save must remain resumable.
-          await completeOrSkipDesktopSetupWizard(marketUserDataDir, prepared.profile.dir,
+          await completeOrSkipDesktopSetupWizard(profileUserDataDir, prepared.profile.dir,
             selection === undefined ? 'skipped' : 'completed', setupWizardVersions)
           setupPending = false
           // Keep the current renderer/Host alive for official login and onboarding.
@@ -1529,7 +1395,7 @@ async function start(): Promise<void> {
       const { createLanHttpsCertificate, DesktopLanHttpsCertificateError } = await import('./lan-https-certificate.ts')
       try {
         const certificate = await createLanHttpsCertificate(
-          marketUserDataDir,
+          profileUserDataDir,
           prepared.lanAddresses,
           desktopLanHttpsPrivateKeyProtector(),
         )
@@ -1569,7 +1435,7 @@ async function start(): Promise<void> {
       lifecycleRecorder.transitionStartupStage(startupStage)
       await startIsolatedDesktopHost({
         host: { prepared, profilePreferences, homeDir, activeProfileName, pluginManagementStatePath,
-          selectionStatePath, marketUserDataDir, releaseUserDataLocations, desktopLaunchEnvironment,
+          selectionStatePath, userDataDir: profileUserDataDir, desktopLaunchEnvironment,
           desktopProxyOverlay: proxyResolution.overlay,
           desktopPnpmBootstrap, logDirectory: join(desktopUserDataDir, 'logs', 'host') },
         runtime, rendererToken: browserAccess.rendererHeader.value,
@@ -1596,7 +1462,7 @@ async function start(): Promise<void> {
       // Setup saves from the Electron process after this Host booted; follow the
       // durable file so its choices are neither reverted nor hidden.
       const latestProfilePreferences = (): DesktopProfilePreferences =>
-        readDesktopProfilePreferences(marketUserDataDir, prepared.profile.dir) ?? currentProfilePreferences
+        readDesktopProfilePreferences(profileUserDataDir, prepared.profile.dir) ?? currentProfilePreferences
       const enqueueProfilePreferencesWrite = (
         update: (current: DesktopProfilePreferences) => DesktopProfilePreferences,
       ): Promise<DesktopProfilePreferencesStateV2> => {
@@ -1606,7 +1472,7 @@ async function start(): Promise<void> {
         const write = profilePreferencesWriteTail.then(async () => {
           const next = update(latestProfilePreferences())
           const stored = await writeDesktopProfilePreferences(
-            marketUserDataDir,
+            profileUserDataDir,
             prepared.profile.dir,
             next,
           )
@@ -1693,11 +1559,11 @@ async function start(): Promise<void> {
                 currentProfileName: activeProfileName,
                 clearDisabledState: () => clearDesktopProfilePluginState(pluginManagementStatePath, name),
                 clearCheckpoint: async () => {
-                  clearDesktopProfileUsageHistory(releaseUserDataLocations, profileDir)
+                  clearDesktopProfileUsageHistory(profileUserDataDir, profileDir)
                 },
               }, name)
               try {
-                await clearDesktopProfilePreferences(marketUserDataDir, profileDir)
+                await clearDesktopProfilePreferences(profileUserDataDir, profileDir)
               } catch (cause) {
                 hostCtx.logger.error(
                   `${BIN_NAME}: deleted Profile left stale preference state: ${cause instanceof Error ? cause.message : String(cause)}`,

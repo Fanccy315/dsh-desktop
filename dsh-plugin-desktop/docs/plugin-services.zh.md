@@ -153,11 +153,6 @@ interface DesktopProfiles {
 interface DesktopPnpm {
   run(argv: readonly string[], signal?: AbortSignal): DesktopPnpmHandle
   runPlugin(argv: readonly string[], invokingDir: string, signal?: AbortSignal): DesktopPnpmHandle
-  runExternalMarketPluginInstall(
-    argv: readonly string[],
-    invokingDir: string,
-    signal?: AbortSignal,
-  ): DesktopPnpmHandle
 }
 
 interface DesktopPnpmHandle {
@@ -177,7 +172,6 @@ interface DesktopPnpmHandle {
 | --- | --- | --- |
 | `run(argv, signal?)` | 直接执行已打包 pnpm JavaScript entry，以激活 Profile 目录为 `cwd`。 | 任意由调用方负责的 pnpm operation。 |
 | `runPlugin(argv, invokingDir, signal?)` | 从绝对调用方目录执行已打包的 `dsh plugin --profile <active>`，并传入插件 argv。 | 依赖 DSH bundle reconcile 的插件管理器兼容适配。 |
-| `runExternalMarketPluginInstall(argv, invokingDir, signal?)` | 使用同一套已打包 DSH plugin CLI，但只接受 `add`、flag 选项与一个精确版本 npm target。 | 内置 `dshmarket` runtime 的窄兼容适配。 |
 
 新集成应优先直接传入 pnpm argv，例如：
 
@@ -187,7 +181,7 @@ interface DesktopPnpmHandle {
 ['install', '--no-frozen-lockfile']
 ```
 
-使用 `run()` 时，package 身份策略、命令构造、`dsh.profile.bundles` reconcile、receipt 和操作后验证均由调用方负责；兼容适配器会把 bundle reconcile 委托给已打包的 DSH CLI。三个方法都不会为 package operation 做快照、回滚、重试、保护或记录。Desktop 恢复与此独立：每次健康启动写入三个轮转配置 checkpoint 之一，同时覆盖激活 Profile 与共享 DSH home 设置和补丁；用户可在恢复页面明确选择精确槽位恢复。
+使用 `run()` 时，package 身份策略、命令构造、`dsh.profile.bundles` reconcile、receipt 和操作后验证均由调用方负责；兼容适配器会把 bundle reconcile 委托给已打包的 DSH CLI。两个方法都不会为 package operation 做快照、回滚、重试、保护或记录。Desktop 恢复与此独立：每次健康启动写入三个轮转配置 checkpoint 之一，同时覆盖激活 Profile 与共享 DSH home 设置和补丁；用户可在恢复页面明确选择精确槽位恢复。
 
 Service 在每个 generation 同时最多启动一个 package operation；已有 operation 活跃时再次调用会同步抛错。它只暴露输出，不选择 progress UI，也没有内置 timeout。Consumer 拥有 deadline、读取两个 stream、报告 progress、在需要时调用 `cancel()` 或 abort signal、等待 `done`，并同时检查 `exitCode` 与 `signal`。
 
@@ -333,10 +327,6 @@ yarn workspace dsh-plugin-desktop verify:profile
 8. 向用户报告 generation-wide busy error，不能并发启动 profile mutation。
 9. 在所属 Cordis effect disposer 中 cancel 活跃工作；协调 teardown 时还要等待其结束。
 10. 把 `desktopProfiles.select()` 视为重启边界，不能继续假设目标已在旧 generation 中生效。
-
-## 内置 dshmarket 适配
-
-内置 `dshmarket` runtime 使用 `runPlugin()` 执行普通插件命令，并使用 `runExternalMarketPluginInstall()` 执行精确 npm add。后者会在跨越 service 前解析版本，并拒绝非精确或多 target 请求。两种操作都会使用当前 Desktop Profile 与已打包 DSH CLI；都不会创建安装 transaction、快照、receipt、自动回滚或恢复提示。
 
 ## 稳定性边界
 

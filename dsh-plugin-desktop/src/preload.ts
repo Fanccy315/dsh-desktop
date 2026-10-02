@@ -34,8 +34,8 @@ if (process.platform === 'darwin') {
 }
 
 // Upstream client plugins recognize the Desktop renderer by this carrier. Version 1
-// without `updates` or `browser` keeps upstream update badges and the embedded
-// browser tab on their Web fallbacks, and turns on the DeepSeek account entry whose
+// without `browser` keeps the embedded browser tab on its Web fallback, and turns
+// on the DeepSeek account entry whose
 // Platform sign-in the Host hands to the native shell (src/platform-login.ts).
 contextBridge.exposeInMainWorld('dshDesktop', Object.freeze({ protocolVersion: 1 }))
 

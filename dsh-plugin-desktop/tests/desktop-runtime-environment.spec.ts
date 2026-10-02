@@ -704,12 +704,10 @@ describe('desktop Host dsh runtime', () => {
  * Node, rejects its `--type=` switches, and exits before it can launch.
  */
 describe("RunAsNode scope", () => {
-  it("never exports the flag from either Electron main process", () => {
-    for (const variant of ["dsh-plugin-desktop", "dsh-plugin-desktop-beta"]) {
-      const source = readFileSync(new URL(`../../${variant}/src/main.ts`, import.meta.url), "utf8")
-      expect(source).not.toMatch(/process\.env\.ELECTRON_RUN_AS_NODE\s*=/u)
-      expect(source).not.toMatch(/process\.env\[("|"'"')ELECTRON_RUN_AS_NODE\1\]\s*=/u)
-    }
+  it("never exports the flag from the Electron main process", () => {
+    const source = readFileSync(new URL('../../dsh-plugin-desktop/src/main.ts', import.meta.url), "utf8")
+    expect(source).not.toMatch(/process\.env\.ELECTRON_RUN_AS_NODE\s*=/u)
+    expect(source).not.toMatch(/process\.env\[("|"'"')ELECTRON_RUN_AS_NODE\1\]\s*=/u)
   })
 
   it("scopes the flag to the runner child in every active runtime patch", () => {

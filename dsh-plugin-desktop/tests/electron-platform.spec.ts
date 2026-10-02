@@ -44,7 +44,6 @@ describe('electronPlatformStrategy', () => {
     const icon = {} as Parameters<typeof strategy.configureApplication>[0]
 
     expect(strategy.platform).toBe('win32')
-    expect(strategy.updateDownloadPlatform).toBe('win32')
     expect(strategy.canPickDirectory).toBe(true)
     expect(strategy.canToggleShellMode).toBe(true)
     expect(strategy.hidesWindowOnClose).toBe(true)
@@ -65,7 +64,6 @@ describe('electronPlatformStrategy', () => {
     const icon = {} as Parameters<typeof strategy.configureApplication>[0]
 
     expect(strategy.platform).toBe('darwin')
-    expect(strategy.updateDownloadPlatform).toBe('darwin')
     expect(strategy.canPickDirectory).toBe(true)
     expect(strategy.canToggleShellMode).toBe(true)
     expect(strategy.hidesWindowOnClose).toBe(true)
@@ -93,7 +91,6 @@ describe('electronPlatformStrategy', () => {
     const window = createWindow()
 
     expect(strategy.platform).toBe('linux')
-    expect(strategy.updateDownloadPlatform).toBeUndefined()
     expect(strategy.canPickDirectory).toBe(false)
     expect(strategy.canToggleShellMode).toBe(false)
     // No Linux desktop guarantees a status area, so a hidden window would have

@@ -410,9 +410,7 @@ virtualStoreDirMaxLength: 60
     expect(rows.find(row => row.id === 'desktop-pnpm')).toEqual(expect.objectContaining({
       name: 'dsh-plugin-desktop/pnpm',
     }))
-    expect(rows.find(row => row.id === 'desktop-updates')).toEqual(expect.objectContaining({
-      name: 'dsh-plugin-desktop/updates',
-    }))
+    expect(rows.map(row => row.id)).not.toContain('desktop-updates')
     expect(rows.find(row => row.id === 'desktop-notifications')).toEqual(expect.objectContaining({
       name: 'dsh-plugin-desktop/notifications',
     }))

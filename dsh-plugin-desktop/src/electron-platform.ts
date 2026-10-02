@@ -2,12 +2,10 @@ import { app, Menu } from 'electron'
 import type { BrowserWindow, MenuItemConstructorOptions, NativeImage } from 'electron'
 import { macApplicationMenuTemplate, nativeMenuLocale } from './native-menu.ts'
 import type { DesktopPlatform } from './runtime.ts'
-import type { DesktopDownloadPlatform } from './update-download.ts'
 
 /** Native presentation and capability differences selected once at startup. */
 export interface ElectronPlatformStrategy {
   readonly platform: DesktopPlatform
-  readonly updateDownloadPlatform: DesktopDownloadPlatform | undefined
   readonly canPickDirectory: boolean
   readonly canToggleShellMode: boolean
   /**
@@ -30,7 +28,6 @@ export interface ElectronPlatformStrategy {
 
 class WindowsPlatformStrategy implements ElectronPlatformStrategy {
   readonly platform = 'win32'
-  readonly updateDownloadPlatform = 'win32'
   readonly canPickDirectory = true
   readonly canToggleShellMode = true
   readonly hidesWindowOnClose = true
@@ -50,7 +47,6 @@ class WindowsPlatformStrategy implements ElectronPlatformStrategy {
 
 class MacPlatformStrategy implements ElectronPlatformStrategy {
   readonly platform = 'darwin'
-  readonly updateDownloadPlatform = 'darwin'
   readonly canPickDirectory = true
   readonly canToggleShellMode = true
   readonly hidesWindowOnClose = true
@@ -84,7 +80,6 @@ class MacPlatformStrategy implements ElectronPlatformStrategy {
 
 class LinuxPlatformStrategy implements ElectronPlatformStrategy {
   readonly platform = 'linux'
-  readonly updateDownloadPlatform = undefined
   readonly canPickDirectory = false
   readonly canToggleShellMode = false
   readonly hidesWindowOnClose = false

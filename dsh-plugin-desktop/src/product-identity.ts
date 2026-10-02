@@ -1,35 +1,40 @@
-/** Stable and Beta identities used to locate each edition's private app data. */
-export const DESKTOP_RELEASE_IDENTITIES = Object.freeze({
-  stable: Object.freeze({
-    releaseChannel: 'stable' as const,
-    packageName: 'dsh-plugin-desktop',
-    productName: 'DSH Desktop',
-    appId: 'ai.deepseek.dsh.desktop',
-    homeDirectoryName: '.dsh',
-  }),
-  beta: Object.freeze({
-    releaseChannel: 'beta' as const,
-    packageName: 'dsh-plugin-desktop-beta',
-    productName: 'DSH Desktop Beta',
-    appId: 'ai.deepseek.dsh.desktop.beta',
-    homeDirectoryName: '.dsh-beta',
-  }),
+/** Stable release-channel identities that must stay aligned with electron-builder. */
+
+import { readFileSync } from 'node:fs'
+
+export const DESKTOP_PRODUCT_IDENTITY = Object.freeze({
+  releaseChannel: 'stable' as const,
+  packageName: 'dsh-plugin-desktop',
+  productName: 'DSH Desktop',
+  appId: 'ai.deepseek.dsh.desktop',
+  homeDirectoryName: '.dsh',
 })
 
-export type DesktopProductIdentity = typeof DESKTOP_RELEASE_IDENTITIES[keyof typeof DESKTOP_RELEASE_IDENTITIES]
+export type DesktopProductIdentity = typeof DESKTOP_PRODUCT_IDENTITY
 
-/** Stable release-channel identities that must stay aligned with electron-builder. */
-export const DESKTOP_PRODUCT_IDENTITY = DESKTOP_RELEASE_IDENTITIES.stable
-export const OTHER_DESKTOP_PRODUCT_IDENTITY = DESKTOP_RELEASE_IDENTITIES.beta
 export const DESKTOP_PACKAGE_NAME = DESKTOP_PRODUCT_IDENTITY.packageName
-export const BETA_DESKTOP_PACKAGE_NAME = OTHER_DESKTOP_PRODUCT_IDENTITY.packageName
 export const DESKTOP_PRODUCT_NAME = DESKTOP_PRODUCT_IDENTITY.productName
 export const DESKTOP_APP_ID = DESKTOP_PRODUCT_IDENTITY.appId
 export const DESKTOP_RELEASE_CHANNEL = DESKTOP_PRODUCT_IDENTITY.releaseChannel
 export const DESKTOP_HOME_DIRECTORY_NAME = DESKTOP_PRODUCT_IDENTITY.homeDirectoryName
 
-/** Both Desktop package identities are launcher-owned, never Profile plugins. */
+/** The Desktop package identity is launcher-owned, never a Profile plugin. */
 export const DESKTOP_PACKAGE_NAMES: ReadonlySet<string> = new Set([
   DESKTOP_PACKAGE_NAME,
-  BETA_DESKTOP_PACKAGE_NAME,
 ])
+
+/**
+ * Read the desktop package version instead of Electron's development-app version.
+ *
+ * Lives beside the release identity so the headless Host and the Electron runtime
+ * resolve the same number without the Host importing the Electron module.
+ * @param moduleUrl - module below the package's `src` or `lib` directory.
+ * @returns validated desktop product version.
+ */
+export function desktopProductVersion(moduleUrl: string = import.meta.url): string {
+  const value: unknown = JSON.parse(readFileSync(new URL('../package.json', moduleUrl), 'utf8'))
+  if (value === null || typeof value !== 'object' || typeof (value as { version?: unknown }).version !== 'string') {
+    throw new Error('dsh-plugin-desktop: package.json has no product version')
+  }
+  return (value as { version: string }).version
+}

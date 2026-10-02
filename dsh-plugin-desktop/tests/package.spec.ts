@@ -74,21 +74,18 @@ const workspaceManifest = JSON.parse(readFileSync(new URL('package.json', worksp
 const ciWorkflow = readFileSync(new URL('.github/workflows/ci.yml', workspaceRoot), 'utf8')
 const main = readFileSync(new URL('src/main.ts', packageRoot), 'utf8')
 const runtimeVersion = String(manifest.dependencies?.['@deepseek-ai/dsh'])
-const betaRuntimeVersion = (JSON.parse(readFileSync(
-  new URL('dsh-plugin-desktop-beta/package.json', workspaceRoot), 'utf8',
-)) as { dependencies: Record<string, string> }).dependencies['@deepseek-ai/dsh']
 const dshResolution = (name: string): unknown =>
   workspaceManifest.resolutions?.[`${name}@npm:${runtimeVersion}`]
 
 describe('published package surface', () => {
-  it('runs all desktop editions and community market typechecks from the root command', () => {
+  it('runs every owned workspace typecheck from the root command', () => {
     expect(workspaceManifest.scripts?.typecheck)
-      .toBe('yarn workspace dsh-plugin-jc-inventory typecheck && yarn workspace dsh-plugin-desktop typecheck && yarn workspace dsh-plugin-desktop-beta typecheck && yarn workspace dsh-community-market typecheck && yarn workspace dsh-desktop-next typecheck')
+      .toBe('yarn workspace dsh-plugin-jc-inventory typecheck && yarn workspace dsh-plugin-desktop typecheck')
   })
 
-  it('runs all desktop editions and community market tests from the root command', () => {
+  it('runs every owned workspace test from the root command', () => {
     expect(workspaceManifest.scripts?.test)
-      .toBe('yarn workspace dsh-plugin-desktop test && yarn workspace dsh-plugin-desktop-beta test && yarn workspace dsh-community-market test && yarn workspace dsh-desktop-next test')
+      .toBe('yarn workspace dsh-plugin-desktop test')
   })
 
   it('registers both npm launcher names', () => {
@@ -155,10 +152,6 @@ describe('published package surface', () => {
       types: './lib/types/diagnostics.d.ts',
       default: './lib/diagnostics.js',
     })
-    expect(manifest.exports).toHaveProperty('./updates', {
-      types: './lib/types/updates.d.ts',
-      default: './lib/updates.js',
-    })
     expect(manifest.exports).toHaveProperty('./notifications', {
       types: './lib/types/notifications.d.ts',
       default: './lib/notifications.js',
@@ -167,6 +160,7 @@ describe('published package surface', () => {
     expect(manifest.exports).not.toHaveProperty('./desktop-cli')
     expect(manifest.exports).not.toHaveProperty('./desktop-runtime-environment')
     expect(manifest.exports).not.toHaveProperty('./desktop-terminal')
+    expect(manifest.exports).not.toHaveProperty('./updates')
     expect(manifest.exports).not.toHaveProperty('./update-checker')
     expect(manifest.exports).not.toHaveProperty('./update-download')
     expect(manifest.exports).toHaveProperty('./package.json')
@@ -184,21 +178,19 @@ describe('published package surface', () => {
       ],
     })
     expect(readFileSync(new URL('cordis.patch.yml', packageRoot), 'utf8')).toContain('name: dsh-plugin-desktop')
-    expect(readFileSync(new URL('cordis.patch.yml', packageRoot), 'utf8')).not.toContain('name: dsh-community-market')
     expect(readFileSync(new URL('cordis.patch.yml', packageRoot), 'utf8')).toContain('name: dsh-plugin-desktop/terminal')
     expect(readFileSync(new URL('cordis.patch.yml', packageRoot), 'utf8')).toContain('name: dsh-plugin-desktop/pnpm')
     expect(readFileSync(new URL('cordis.patch.yml', packageRoot), 'utf8')).toContain('name: dsh-plugin-desktop/profiles')
     expect(readFileSync(new URL('cordis.patch.yml', packageRoot), 'utf8')).toContain('name: dsh-plugin-desktop/diagnostics')
     expect(readFileSync(new URL('cordis.patch.yml', packageRoot), 'utf8')).toContain('name: dsh-plugin-desktop/notifications')
-    expect(readFileSync(new URL('cordis.patch.yml', packageRoot), 'utf8')).toContain('name: dsh-plugin-desktop/updates')
+    expect(readFileSync(new URL('cordis.patch.yml', packageRoot), 'utf8')).not.toContain('name: dsh-plugin-desktop/updates')
   })
 
-  it('pins both selectable Market providers in the published runtime', () => {
+  it('links only owned workspace members as runtime plugins', () => {
     expect(manifest.dependencies).toMatchObject({
-      'dsh-community-market': '0.1.0-dev.0',
-      dshmarket: expect.stringMatching(/^\d+\.\d+\.\d+/),
+      'dsh-plugin-jc-inventory': 'workspace:*',
     })
-    expect(manifest.optionalDependencies ?? {}).not.toHaveProperty('dshmarket')
+    expect(manifest.optionalDependencies ?? {}).toEqual({})
   })
 
   it('patches the browse panel with the Windows native-picker icon bridge', () => {
@@ -298,29 +290,20 @@ describe('published package surface', () => {
     )
   })
 
-  it('resolves both release channels through their recorded runtime families', () => {
+  it('resolves every DSH runtime package through the recorded runtime version', () => {
     const dshResolutions = Object.entries(workspaceManifest.resolutions ?? {})
       .filter(([selector]) => /^@deepseek-ai\/dsh(?:@|-)/u.test(selector))
-    const stableResolutions = dshResolutions.filter(([selector]) =>
+    const pinnedResolutions = dshResolutions.filter(([selector]) =>
       selector.endsWith(`@npm:${runtimeVersion}`)
       || selector.endsWith(`@npm:^${runtimeVersion}`))
-    const betaResolutions = dshResolutions.filter(([selector]) =>
-      selector.endsWith(`@npm:${betaRuntimeVersion}`)
-      || selector.endsWith(`@npm:^${betaRuntimeVersion}`))
 
-    expect(stableResolutions.length).toBeGreaterThan(0)
-    expect(betaResolutions.length).toBeGreaterThan(0)
-    expect(new Set([...stableResolutions, ...betaResolutions].map(([selector]) => selector)).size)
-      .toBe(dshResolutions.length)
-    for (const [selector, resolution] of stableResolutions) {
+    expect(pinnedResolutions.length).toBeGreaterThan(0)
+    // Derived from the package manifest, not hardcoded: a runtime bump moves this
+    // assertion with the pin instead of failing a release that is already correct.
+    expect(pinnedResolutions.length).toBe(dshResolutions.length)
+    for (const [selector, resolution] of pinnedResolutions) {
       expect([runtimeVersion, `^${runtimeVersion}`]).toContain(selector.split('@npm:')[1])
       expect(String(resolution)).toContain(runtimeVersion)
-    }
-    // Derived from the beta manifest, not hardcoded: a channel bump moves this
-    // assertion with the pin instead of failing a release that is already correct.
-    for (const [selector, resolution] of betaResolutions) {
-      expect([betaRuntimeVersion, `^${betaRuntimeVersion}`]).toContain(selector.split('@npm:')[1])
-      expect(String(resolution)).toContain(betaRuntimeVersion)
     }
   })
 
@@ -431,8 +414,6 @@ describe('published package surface', () => {
     expect(config).toContain("preload: 'src/preload.ts', 'compatibility-preload': 'src/compatibility-preload.ts'")
     expect(config).toContain("entryFileNames: '[name].cjs'")
     expect(config).toContain("terminal: 'src/terminal.ts'")
-    expect(config).toContain("'update-download': 'src/update-download.ts'")
-    expect(config).toContain("updates: 'src/updates.ts'")
   })
 
   it('builds the browser client without Node process globals', () => {
@@ -591,11 +572,11 @@ describe('published package surface', () => {
   it('creates unified Profile checkpoints before composition and records only after health', () => {
     const main = readFileSync(new URL('src/main.ts', packageRoot), 'utf8')
     const beginProfile = main.indexOf('const profileStartup = beginDesktopProfileStartup(')
-    const admissionGuard = main.indexOf('if (!recoveryModeRequested)', beginProfile)
-    const admission = main.indexOf('inspectDesktopProfileChannelAdmission(', admissionGuard)
     const checkpoint = main.indexOf('profileCheckpoint = new DesktopProfileCheckpoint({', beginProfile)
     const recoveryController = main.indexOf('startupRecoveryController = new DesktopStartupRecoveryController({', checkpoint)
-    const prepare = main.indexOf('let prepared = prepareDesktopProfile(')
+    const recoveryGuard = main.indexOf('if (recoveryModeRequested)', recoveryController)
+    const prepare = main.indexOf('let prepared = prepareDesktopProfile(', recoveryGuard)
+    const usageGate = main.indexOf('!hasDesktopProfileUsageHistory(', prepare)
     const monitor = main.indexOf('const rendererBoot = runtime.beginRendererBootMonitoring({')
     const commitHealthy = main.indexOf('commitHealthy: async () => {', monitor)
     const captureHealthy = main.indexOf('profileCheckpoint?.captureHealthy()', commitHealthy)
@@ -603,12 +584,12 @@ describe('published package surface', () => {
     const mount = main.indexOf('runtime.mountScheduled(),', awaitRenderer)
 
     expect(beginProfile).toBeGreaterThanOrEqual(0)
-    expect(admissionGuard).toBeGreaterThan(beginProfile)
-    expect(admission).toBeGreaterThan(admissionGuard)
-    expect(checkpoint).toBeGreaterThan(admission)
+    expect(checkpoint).toBeGreaterThan(beginProfile)
     expect(recoveryController).toBeGreaterThan(checkpoint)
-    expect(prepare).toBeGreaterThan(recoveryController)
-    expect(monitor).toBeGreaterThan(prepare)
+    expect(recoveryGuard).toBeGreaterThan(recoveryController)
+    expect(prepare).toBeGreaterThan(recoveryGuard)
+    expect(usageGate).toBeGreaterThan(prepare)
+    expect(monitor).toBeGreaterThan(usageGate)
     expect(commitHealthy).toBeGreaterThan(monitor)
     expect(captureHealthy).toBeGreaterThan(commitHealthy)
     expect(awaitRenderer).toBeGreaterThan(captureHealthy)
@@ -635,8 +616,8 @@ describe('published package surface', () => {
     expect(complete).toBeGreaterThan(persist)
     expect(boot).toBeGreaterThan(complete)
     expect(main).not.toContain('new DesktopSetupWizardWindow(')
-    expect(main).toContain('desktopSetupWizardPending(marketUserDataDir, prepared.profile.dir)')
-    expect(main).toContain('!hasDesktopProfileUsageHistory(releaseUserDataLocations, prepared.profile.dir, activeProfileName)')
+    expect(main).toContain('desktopSetupWizardPending(profileUserDataDir, prepared.profile.dir)')
+    expect(main).toContain('!hasDesktopProfileUsageHistory(profileUserDataDir, prepared.profile.dir, activeProfileName)')
     expect(main).toContain("selection === undefined ? 'skipped' : 'completed'")
     expect(main).toContain('profile !== activeProfileName || safeModePaths !== undefined')
     const client = readFileSync(new URL('src/client/onboarding.tsx', packageRoot), 'utf8')
@@ -648,7 +629,7 @@ describe('published package surface', () => {
     const preferencesSource = readFileSync(new URL('src/profile-preferences.ts', packageRoot), 'utf8')
     const projection = preferencesSource.indexOf('function desktopProfilePreferencesFromSettings(')
     const projectionEnd = preferencesSource.indexOf('type ErrorFactory', projection)
-    const readPreferences = main.indexOf('readDesktopProfilePreferences(marketUserDataDir, activeProfileDir)')
+    const readPreferences = main.indexOf('readDesktopProfilePreferences(profileUserDataDir, activeProfileDir)')
     const firstPrepare = main.indexOf('let prepared = prepareDesktopProfile(', readPreferences)
     const legacyPresetMigration = main.indexOf('migrateLegacyAgentPresetSettings(', firstPrepare)
     const missingState = main.indexOf('if (profilePreferences === undefined)', firstPrepare)
@@ -888,7 +869,6 @@ describe('published package surface', () => {
     expect(manifest.scripts?.['dist:mac-smoke']).toBe('node scripts/package-mac.ts')
     expect(manifest.scripts?.['dist:win']).toBe('node scripts/package-win.ts')
     expect(manifest.scripts?.['dist:win-portable']).toBe('node scripts/package-win-portable.ts')
-    expect(manifest.scripts?.['check:win-package:platform']).not.toContain('yarn workspace dsh-community-market build')
     expect(manifest.scripts?.['check:win-package:platform']).toContain('yarn run build')
     expect(manifest.scripts?.['check:win-package']).toBe('yarn run check:win-package:platform && yarn run typecheck')
     expect(manifest.scripts?.['check:win-package:platform']).not.toContain('typecheck')
@@ -896,12 +876,9 @@ describe('published package surface', () => {
     expect(manifest.scripts?.['check:win-package:platform']).toContain('tests/desktop-installer-quit.spec.ts')
     expect(manifest.scripts?.['check:win-package:platform']).toContain('tests/installer-nsh.spec.ts')
     expect(manifest.scripts?.['check:win-package:platform']).toContain('tests/verify-win-portable.spec.ts')
-    expect(manifest.scripts?.['check:win-package:platform']).toContain('tests/update-checker.spec.ts')
-    expect(manifest.scripts?.['check:win-package:platform']).toContain('tests/update-download.spec.ts')
     expect(manifest.scripts?.['check:win-package:platform']).toContain('tests/windows-volume-diagnostics.spec.ts')
     expect(manifest.scripts?.['check:win-package:platform']).not.toContain('verify:win-minimal-pty')
     expect(manifest.scripts?.['check:win-package:platform']).toContain('yarn run verify:closure')
-    expect(manifest.scripts?.['check:mac-package:platform']).not.toContain('yarn workspace dsh-community-market build')
     expect(manifest.scripts?.['check:mac-package:platform']).toContain('yarn run build')
     expect(manifest.scripts?.['check:mac-package']).toBe('yarn run check:mac-package:platform && yarn run typecheck')
     expect(manifest.scripts?.['check:mac-package:platform']).not.toContain('typecheck')
@@ -914,13 +891,13 @@ describe('published package surface', () => {
     expect(manifest.scripts?.['verify:cli']).toBe('node scripts/verify-cli-runtime.mjs')
     expect(manifest.scripts?.check).toContain('yarn run verify:cli')
     expect(workspaceManifest.scripts?.['dist:mac'])
-      .toBe('yarn market:prepare && yarn aa:prepare-release && yarn workspace dsh-community-market build && yarn workspace dsh-plugin-desktop dist:mac')
+      .toBe('yarn workspace dsh-plugin-desktop dist:mac')
     expect(workspaceManifest.scripts?.['dist:mac-smoke'])
-      .toBe('yarn market:prepare && yarn aa:prepare-release && yarn workspace dsh-community-market build && yarn workspace dsh-plugin-desktop dist:mac-smoke')
+      .toBe('yarn workspace dsh-plugin-desktop dist:mac-smoke')
     expect(workspaceManifest.scripts?.['dist:win'])
-      .toBe('yarn market:prepare && yarn aa:prepare-release && yarn aa:prepare-release --verify-release && yarn workspace dsh-community-market build && yarn workspace dsh-plugin-desktop dist:win')
+      .toBe('yarn workspace dsh-plugin-desktop dist:win')
     expect(workspaceManifest.scripts?.['dist:win-portable'])
-      .toBe('yarn market:prepare && yarn aa:prepare-release && yarn aa:prepare-release --verify-release && yarn workspace dsh-community-market build && yarn workspace dsh-plugin-desktop dist:win-portable')
+      .toBe('yarn workspace dsh-plugin-desktop dist:win-portable')
     expect(manifest.build?.afterPack).toBe('./scripts/verify-packaged-runtime.ts')
     expect(manifest.build?.afterAllArtifactBuild).toBe('./scripts/verify-electron-fuses.ts')
     expect(manifest.build?.mac).toEqual(expect.objectContaining({
@@ -953,7 +930,7 @@ describe('published package surface', () => {
     )
 
     expect(windowsJob).not.toContain('- run: yarn check')
-    expect(windowsJob).toContain('workspace: [dsh-plugin-desktop, dsh-plugin-desktop-beta]')
+    expect(windowsJob).toContain('workspace: [dsh-plugin-desktop]')
     expect(windowsJob).toContain('- run: yarn workspace ${{ matrix.workspace }} check:win-package:platform')
     expect(windowsJob).toContain('run: yarn workspace ${{ matrix.workspace }} dist:win')
     expect(windowsJob).toContain('run: yarn workspace ${{ matrix.workspace }} dist:win-portable')
@@ -961,7 +938,7 @@ describe('published package surface', () => {
     // Smoke artifacts are never published, so CI skips their compression.
     expect(windowsJob.match(/DSH_WINDOWS_PACKAGE_COMPRESSION: store/g)).toHaveLength(2)
     expect(macosJob).not.toContain('- run: yarn check')
-    expect(macosJob).toContain('workspace: [dsh-plugin-desktop, dsh-plugin-desktop-beta]')
+    expect(macosJob).toContain('workspace: [dsh-plugin-desktop]')
     expect(macosJob).toContain('- run: yarn workspace ${{ matrix.workspace }} check:mac-package:platform')
     expect(macosJob).toContain('run: yarn workspace ${{ matrix.workspace }} dist:mac-smoke')
     expect(macosJob).toContain('DSH_PACKAGE_CHECK_ALREADY_RAN: \'1\'')
@@ -982,7 +959,7 @@ describe('published package surface', () => {
       'docs/architecture.md',
       '.agents/notes/implemented/architecture/decision.md',
       '.agents/notes/implemented/architecture/decision.i18n.yaml',
-      'dsh-community-market/docs/schema.json',
+      'dsh-plugin-desktop/docs/plugin-services.md',
       '.github/ISSUE_TEMPLATE/feature_request.yml',
     ])).toBe('false')
     expect(classify(['README.md', 'dsh-plugin-desktop/src/index.ts'])).toBe('true')
@@ -1340,7 +1317,7 @@ describe('recovery bundle selection stays out of profile composition', () => {
     expect(profile).not.toContain('readDesktopRecoveryBundleInventory')
   })
 
-  it('keeps the recovery controller off the community-market disable state writers', () => {
+  it('keeps the recovery controller off the bundle disable state writers', () => {
     const controller = readFileSync(new URL('src/startup-recovery-controller.ts', packageRoot), 'utf8')
     expect(controller).not.toMatch(
       /readDesktopDisabledBundles|disableDesktopProfileBundle|enableDesktopProfileBundle/u,

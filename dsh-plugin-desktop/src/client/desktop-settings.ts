@@ -98,7 +98,6 @@ export function applyDesktopSettings(
     inject: () => ({
       api,
       platform: environment.platform,
-      version: environment.version,
       initialMode: environment.mode,
       setMode,
       desktopSettings,

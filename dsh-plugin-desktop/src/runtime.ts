@@ -1,8 +1,6 @@
 import type { Context } from '@deepseek-ai/cordis'
 import type { DesktopRendererAccessHeader } from './desktop-browser-access.ts'
 import type { RendererBootReport } from './renderer-boot-contract.ts'
-import type { DesktopReleaseChannel, UpdateCheckResult, UpdateRequest } from './update-checker.ts'
-import type { DesktopInstallationId } from './desktop-installation-id.ts'
 import type { ProfileCreateWindowOptions } from './profile-create-window.ts'
 import type { DesktopPlatformLoginRequest } from './platform-login.ts'
 import type {
@@ -69,7 +67,6 @@ export interface DesktopTraySubmenuItem {
 
 /** One effect-scoped command or submenu contributed to the native tray menu. */
 export interface DesktopTrayItem {
-  readonly id?: 'check-for-updates'
   /** Menu section used for deterministic ordering and separators. */
   group: DesktopTrayItemGroup
   /** Relative position inside the selected group. */
@@ -98,41 +95,6 @@ export interface DesktopNotification {
   title: string
   /** Concise user-facing status. */
   body: string
-}
-
-/** Electron capabilities used by the headless update plugin. */
-export interface DesktopUpdateAdapter {
-  /** Whether the running executable came from an Electron package. */
-  readonly isPackaged: boolean
-  /** Whether this platform has a fixed installer download endpoint. */
-  readonly canDownload: boolean
-  /** Installed desktop product version. */
-  readonly currentVersion: string
-  /** Release stream selected by this packaged product. Legacy adapters default to stable. */
-  readonly releaseChannel?: DesktopReleaseChannel
-  /** Private file used to suppress repeated background update announcements. */
-  readonly statePath: string
-  /** Pseudonymous installation UUID attached only to the fixed version endpoint. */
-  readonly installationId?: DesktopInstallationId
-  /** Request adapter backed by Electron's native network session. */
-  readonly request: UpdateRequest
-  /** Ask whether one strictly newer version may be downloaded. */
-  confirmDownload(version: string, channel?: DesktopReleaseChannel): Promise<boolean>
-  /** Present the outcome of a user-triggered version check. */
-  showManualCheckResult(result: UpdateCheckResult | null): Promise<void>
-  /**
-   * Download and hand one confirmed update to the platform installer. The
-   * optional per-platform digests come from the recheck that confirmed the
-   * version; the adapter applies the one matching its download platform.
-   */
-  downloadAndOpen(
-    version: string,
-    signal: AbortSignal,
-    channel?: DesktopReleaseChannel,
-    installerSha256?: Readonly<Partial<Record<'win32' | 'darwin', string>>>,
-  ): Promise<void>
-  /** Present a native status notification without blocking the Host tree. */
-  notify(notification: DesktopNotification): void
 }
 
 /** Profile identity needed to open the packaged DSH command environment. */
@@ -186,9 +148,6 @@ export interface DesktopRuntime {
 
   /** Locale currently used for native tray contributions. */
   readonly locale: DesktopLocale
-
-  /** Native network, update-download, and notification adapter. */
-  readonly updates: DesktopUpdateAdapter
 
   /**
    * Register one shell generation while the Cordis profile is activating.

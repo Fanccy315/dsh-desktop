@@ -19,7 +19,6 @@ export type DesktopRendererAction =
   | 'reload'
   | 'developer'
   | 'diagnostics'
-  | 'check-for-updates'
 
 /** Capability exposed by the context-isolated preload to the Desktop page. */
 export interface DesktopRendererActionsBridge {

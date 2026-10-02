@@ -4,18 +4,15 @@ import {
   app,
   dialog,
   nativeTheme,
-  net,
   Notification,
   shell,
 } from 'electron'
 import { spawn } from 'node:child_process'
-import { readFileSync } from 'node:fs'
-import { join } from 'node:path'
-import { Readable } from 'node:stream'
 import { fileURLToPath } from 'node:url'
 import { desktopTerminalStateDirectory, openDesktopTerminal } from './desktop-terminal.ts'
 import { showDesktopMessageBox } from './desktop-dialog-window.ts'
 import { packagedDependencyPath } from './packaged-runtime-path.ts'
+import { desktopProductVersion } from './product-identity.ts'
 import { ElectronShellGeneration } from './electron-shell-generation.ts'
 import { isPlatformLoginDestination, type DesktopPlatformLoginRequest } from './platform-login.ts'
 import { PLATFORM_LOGIN_TITLE, platformLoginUrl } from './platform-login-window.ts'
@@ -32,7 +29,6 @@ import type {
   DesktopTrayItem,
   DesktopTrayItemGroup,
   DesktopTrayItemRegistration,
-  DesktopUpdateAdapter,
 } from './runtime.ts'
 import type { RendererBootReport } from './renderer-boot-contract.ts'
 import {
@@ -51,19 +47,6 @@ import {
   rendererRecoveryCopy,
 } from './tray-locale.ts'
 import {
-  desktopUpdateFilename,
-  downloadDesktopUpdate,
-  pendingDesktopUpdateArtifact,
-  recordDesktopUpdateArtifact,
-  resolveDesktopUpdateArtifact,
-  type DesktopUpdateArtifact,
-  type UpdateArtifactResponse,
-} from './update-download.ts'
-import type { UpdateCheckResult } from './update-checker.ts'
-import type { DesktopInstallationId } from './desktop-installation-id.ts'
-import { DESKTOP_RELEASE_CHANNEL } from './product-identity.ts'
-import type { DesktopReleaseChannel } from './update-checker.ts'
-import {
   type WindowsVolumeQuery,
 } from './windows-volume-diagnostics.ts'
 import { ElectronWorkspaceAdmission } from './workspace-admission.ts'
@@ -73,19 +56,6 @@ import {
   FileMainWindowStateStore,
   type MainWindowStateStore,
 } from './main-window-state.ts'
-
-/**
- * Read the desktop package version instead of Electron's development-app version.
- * @param moduleUrl - module below the package's `src` or `lib` directory.
- * @returns validated desktop product version.
- */
-export function desktopProductVersion(moduleUrl: string = import.meta.url): string {
-  const value: unknown = JSON.parse(readFileSync(new URL('../package.json', moduleUrl), 'utf8'))
-  if (value === null || typeof value !== 'object' || typeof (value as { version?: unknown }).version !== 'string') {
-    throw new Error('dsh-plugin-desktop: package.json has no product version')
-  }
-  return (value as { version: string }).version
-}
 
 /** Resolve the CommonJS preload emitted beside the Electron runtime bundle. */
 export function desktopPreloadPath(moduleUrl: string = import.meta.url): string {
@@ -97,91 +67,12 @@ const PRODUCT_VERSION = desktopProductVersion()
 /** Main-process deadline for one Renderer generation to settle its client Loader. */
 export const RENDERER_BOOT_TIMEOUT_MS = 30_000
 
-/** HTTP statuses whose Response must be constructed without a body stream. */
-const NULL_BODY_STATUSES = new Set([204, 205, 304])
-
-/**
- * Download-request adapter over Electron `net.request`. `net.fetch` cannot
- * supply the HTTPS check: its Response carries an empty `url` (a
- * documented Electron limitation), so redirects are followed here and the
- * settled URL is reported alongside the response for validation.
- */
-export function requestDesktopArtifact(url: string, init: RequestInit): Promise<UpdateArtifactResponse> {
-  return new Promise((resolve, reject) => {
-    const request = net.request({ url, method: 'GET', redirect: 'manual' })
-    let finalUrl = url
-    let settled = false
-    const headers = new Headers(init.headers)
-    // Approximates the fetch `cache: 'no-store` intent over the Chromium net stack.
-    headers.set('cache-control', 'no-cache')
-    headers.forEach((value, key) => { request.setHeader(key, value) })
-    request.on('redirect', (_status, _method, redirectUrl) => {
-      finalUrl = redirectUrl
-      request.followRedirect()
-    })
-    request.on('response', incoming => {
-      if (settled) return
-      settled = true
-      const status = incoming.statusCode
-      if (status === undefined) {
-        reject(new Error('dsh-plugin-desktop: the update download response carried no HTTP status.'))
-        return
-      }
-      const headers = new Headers()
-      for (const [key, value] of Object.entries(incoming.headers)) {
-        for (const item of Array.isArray(value) ? value : [value]) headers.append(key, item)
-      }
-      try {
-        resolve({
-          // Constructing a Response with a body throws synchronously for
-          // null-body statuses (204/205/304), and a synchronous throw inside
-          // this event callback would escape the Promise and crash the main
-          // process, so those statuses resolve without a body stream and any
-          // construction failure rejects instead.
-          response: new Response(
-            NULL_BODY_STATUSES.has(status)
-              ? null
-              : Readable.toWeb(incoming as unknown as Readable) as unknown as ReadableStream<Uint8Array>,
-            { status, headers },
-          ),
-          finalUrl,
-        })
-      } catch (cause) {
-        reject(cause instanceof Error ? cause : new Error(String(cause)))
-      }
-    })
-    request.on('abort', () => {
-      if (settled) return
-      settled = true
-      // ClientRequest.abort() emits 'abort', not 'error', so without this
-      // handler a pre-response cancellation would leave the promise pending.
-      reject(init.signal instanceof AbortSignal && init.signal.reason !== undefined
-        ? init.signal.reason
-        : new DOMException('The operation was aborted', 'AbortError'))
-    })
-    request.on('error', cause => {
-      if (settled) return
-      settled = true
-      reject(cause)
-    })
-    const signal = init.signal
-    if (signal instanceof AbortSignal) {
-      if (signal.aborted) {
-        request.abort()
-        return
-      }
-      signal.addEventListener('abort', () => { request.abort() }, { once: true })
-    }
-    request.end()
-  })
-}
 
 /** Native adapter used by the DSH Desktop launcher and owned by its Cordis shell plugin. */
 export class ElectronDesktopRuntime implements DesktopRuntime {
   setupOnboarding?: import('./setup-onboarding-bridge.ts').DesktopOnboardingBridge
   readonly platform: DesktopPlatform
   private readonly platformStrategy: ElectronPlatformStrategy
-  readonly updates: DesktopUpdateAdapter
 
   private generation: ElectronShellGeneration | undefined
   private currentLocale: DesktopLocale = 'en'
@@ -192,7 +83,6 @@ export class ElectronDesktopRuntime implements DesktopRuntime {
   private terminalSpec: DesktopTerminalSpec | undefined
   private diagnosticExport: Promise<void> | undefined
   private readonly workspaceAdmission: ElectronWorkspaceAdmission
-  private updateCleanupTask: Promise<void> | undefined
   private rendererHealthGate: DesktopRendererHealthGate | undefined
   private rendererBootHealthy = false
   private profileCreateWindow: ProfileCreateWindow | undefined
@@ -205,7 +95,6 @@ export class ElectronDesktopRuntime implements DesktopRuntime {
     private readonly logger: DesktopLogger | undefined = undefined,
     workspaceVolumeQuery: WindowsVolumeQuery | undefined = undefined,
     private readonly mainWindowState: MainWindowStateStore = new FileMainWindowStateStore(app.getPath('userData')),
-    installationId?: DesktopInstallationId,
   ) {
     this.platformStrategy = electronPlatformStrategy()
     this.platform = this.platformStrategy.platform
@@ -221,19 +110,6 @@ export class ElectronDesktopRuntime implements DesktopRuntime {
       logError: message => { this.logError(message) },
       ...(workspaceVolumeQuery === undefined ? {} : { volumeQuery: workspaceVolumeQuery }),
     })
-    this.updates = {
-      get isPackaged() { return app.isPackaged },
-      get canDownload() { return app.isPackaged && platformStrategy.updateDownloadPlatform !== undefined },
-      get currentVersion() { return PRODUCT_VERSION },
-      get releaseChannel() { return DESKTOP_RELEASE_CHANNEL },
-      get statePath() { return join(app.getPath('userData'), 'updates', 'state.json') },
-      ...(installationId === undefined ? {} : { installationId }),
-      request: (url, init) => net.fetch(url, init),
-      confirmDownload: (version, channel) => this.confirmUpdateDownload(version, channel),
-      showManualCheckResult: result => this.showManualUpdateCheckResult(result),
-      downloadAndOpen: (version, signal, channel, installerSha256) => this.downloadAndOpenUpdate(version, signal, channel, installerSha256),
-      notify: notification => { this.showNotification(notification) },
-    }
   }
 
   /** Log an Electron-scope error to the sink, falling back to stderr without a logger. */
@@ -337,19 +213,11 @@ export class ElectronDesktopRuntime implements DesktopRuntime {
           reload: () => { this.reloadRenderer() },
           developerTools: () => { this.toggleDeveloperTools() },
           exportDiagnostics: () => this.exportDiagnostics(),
-          checkForUpdates: async () => {
-            const command = [...this.trayItems.values()].find(item => item.id === 'check-for-updates')
-            if (command === undefined || command.enabled?.() === false) throw new Error('Desktop update check is unavailable')
-            await command.invoke()
-          },
         },
       })
       this.generation = generation
       this.mountTask = generation.mount(beforeInteractive).then(() => {
         this.rendererHealthGate?.acceptNativeMount()
-        void this.offerUpdateArtifactCleanup().catch((cause: unknown) => {
-          this.logError(`dsh-plugin-desktop: failed to resolve update installer cleanup: ${cause instanceof Error ? cause.message : String(cause)}`)
-        })
       }).catch((cause: unknown) => {
         if (this.generation === generation) this.generation = undefined
         throw cause
@@ -366,6 +234,11 @@ export class ElectronDesktopRuntime implements DesktopRuntime {
   /** @inheritdoc */
   notifyAttention(notification: DesktopNotification): void {
     this.generation?.notifyAttention(notification)
+  }
+
+  /** Present a native status notification without blocking the Host tree. */
+  notify(notification: DesktopNotification): void {
+    this.showNotification(notification)
   }
 
   /** @inheritdoc */
@@ -755,230 +628,10 @@ export class ElectronDesktopRuntime implements DesktopRuntime {
     nativeNotification.show()
   }
 
-  private async showUpdateMessageBox(options: Electron.MessageBoxOptions): Promise<Electron.MessageBoxReturnValue> {
-    return await this.showDesktopMessageBox(options)
-  }
-
   private async showDesktopMessageBox(options: Electron.MessageBoxOptions): Promise<Electron.MessageBoxReturnValue> {
     return this.generation === undefined
       ? await showDesktopMessageBox(options)
       : await this.generation.showMessageBox(options)
-  }
-
-  private async showUpdateSaveDialog(options: Electron.SaveDialogOptions): Promise<Electron.SaveDialogReturnValue> {
-    return this.generation === undefined
-      ? await dialog.showSaveDialog(options)
-      : await this.generation.showSaveDialog(options)
-  }
-
-  /** Ask before making the fixed download endpoint's counted request. */
-  private async confirmUpdateDownload(
-    version: string,
-    channel: DesktopReleaseChannel = 'stable',
-  ): Promise<boolean> {
-    const copy = desktopNativeCopy(this.currentLocale)
-    const result = await this.showUpdateMessageBox({
-      type: 'info',
-      title: copy.updateAvailableTitle,
-      message: copy.updateAvailableMessage(version),
-      detail: channel === DESKTOP_RELEASE_CHANNEL
-        ? copy.downloadUpdate
-        : copy.installStableAlongsideBeta,
-      buttons: [copy.download, copy.later],
-      defaultId: 1,
-      cancelId: 1,
-      noLink: true,
-    })
-    return result.response === 0
-  }
-
-  /** Report one user-triggered check without exposing network or response details. */
-  private async showManualUpdateCheckResult(result: UpdateCheckResult | null): Promise<void> {
-    const copy = desktopNativeCopy(this.currentLocale)
-    if (result === null) {
-      await this.showUpdateMessageBox({
-        type: 'warning',
-        title: copy.updateCheckFailedTitle,
-        message: copy.updateCheckFailedMessage,
-        detail: copy.tryAgainLater,
-        buttons: [copy.ok],
-        defaultId: 0,
-        noLink: true,
-      })
-      return
-    }
-
-    if (result.status === 'up-to-date') {
-      await this.showUpdateMessageBox({
-        type: 'info',
-        title: copy.upToDateTitle,
-        message: copy.upToDateMessage,
-        detail: copy.installedVersion(result.currentVersion),
-        buttons: [copy.ok],
-        defaultId: 0,
-        noLink: true,
-      })
-      return
-    }
-
-    await this.showUpdateMessageBox({
-      type: 'info',
-      title: copy.updateAvailableTitle,
-      message: copy.updateAvailableMessage(result.latestVersion),
-      detail: copy.installerUnavailable,
-      buttons: [copy.ok],
-      defaultId: 0,
-      noLink: true,
-    })
-  }
-
-  /** Download a confirmed installer and hand it to the native installation flow. */
-  private async downloadAndOpenUpdate(
-    version: string,
-    signal: AbortSignal,
-    channel: DesktopReleaseChannel = 'stable',
-    installerSha256?: Readonly<Partial<Record<'win32' | 'darwin', string>>>,
-  ): Promise<void> {
-    const copy = desktopNativeCopy(this.currentLocale)
-    const platform = this.platformStrategy.updateDownloadPlatform
-    if (platform === undefined) {
-      throw new Error(`dsh-plugin-desktop: updates are unavailable on ${this.platform}`)
-    }
-    const destinationPath = await this.chooseUpdateDestination(version, channel)
-    if (destinationPath === undefined) return
-    signal.throwIfAborted()
-    const artifactPath = await downloadDesktopUpdate({
-      platform,
-      version,
-      ...(channel === 'stable' ? {} : { channel }),
-      destinationPath,
-      request: requestDesktopArtifact,
-      signal,
-      ...(installerSha256?.[platform] === undefined ? {} : { expectedSha256: installerSha256[platform] }),
-    })
-    signal.throwIfAborted()
-    const artifact: DesktopUpdateArtifact = { platform, version, path: artifactPath }
-    try {
-      await recordDesktopUpdateArtifact(app.getPath('userData'), artifact)
-    } catch (cause) {
-      this.logError(`dsh-plugin-desktop: failed to remember update installer for cleanup: ${cause instanceof Error ? cause.message : String(cause)}`)
-    }
-
-    if (platform === 'darwin') {
-      const openError = await shell.openPath(artifactPath)
-      if (openError !== '') throw new Error(`dsh-plugin-desktop: failed to open update disk image: ${openError}`)
-      signal.throwIfAborted()
-      await this.showUpdateMessageBox({
-        type: 'info',
-        title: copy.updateDownloadedTitle,
-        message: copy.updateReady(version),
-        detail: copy.macInstallInstructions,
-        buttons: [copy.ok],
-        defaultId: 0,
-        noLink: true,
-      })
-      return
-    }
-
-    const result = await this.showUpdateMessageBox({
-      type: 'info',
-      title: copy.updateDownloadedTitle,
-      message: copy.updateReady(version),
-      detail: copy.windowsInstallQuestion,
-      buttons: [copy.restartAndInstall, copy.later],
-      defaultId: 1,
-      cancelId: 1,
-      noLink: true,
-    })
-    if (result.response !== 0) return
-
-    const spec = this.scheduled
-    if (spec === undefined) throw new Error('dsh-plugin-desktop: no active shell can exit for update installation')
-    signal.throwIfAborted()
-    await this.launchWindowsUpdateInstaller(artifactPath)
-    this.quitting = true
-    spec.requestQuit(0)
-  }
-
-  private async chooseUpdateDestination(
-    version: string,
-    channel: DesktopReleaseChannel = 'stable',
-  ): Promise<string | undefined> {
-    if (this.platform !== 'darwin' && this.platform !== 'win32') return undefined
-    const copy = desktopNativeCopy(this.currentLocale)
-    const filename = desktopUpdateFilename(this.platform, version, channel)
-    const extension = this.platform === 'darwin' ? 'dmg' : 'exe'
-    const result = await this.showUpdateSaveDialog({
-      title: copy.saveInstallerTitle,
-      defaultPath: join(app.getPath('downloads'), filename),
-      buttonLabel: copy.saveAndDownload,
-      filters: [{
-        name: this.platform === 'darwin'
-          ? copy.diskImage
-          : copy.windowsInstaller,
-        extensions: [extension],
-      }],
-      properties: ['createDirectory', 'showOverwriteConfirmation', 'dontAddToRecent'],
-    })
-    return result.canceled ? undefined : result.filePath
-  }
-
-  private offerUpdateArtifactCleanup(): Promise<void> {
-    if (this.updateCleanupTask !== undefined) return this.updateCleanupTask
-    const task = this.performUpdateArtifactCleanup().finally(() => {
-      if (this.updateCleanupTask === task) this.updateCleanupTask = undefined
-    })
-    this.updateCleanupTask = task
-    return task
-  }
-
-  private async performUpdateArtifactCleanup(): Promise<void> {
-    if (this.platform !== 'darwin' && this.platform !== 'win32') return
-    const userDataPath = app.getPath('userData')
-    const artifact = await pendingDesktopUpdateArtifact(userDataPath, PRODUCT_VERSION, this.platform)
-    if (artifact === undefined) return
-    const copy = desktopNativeCopy(this.currentLocale)
-    const result = await this.showUpdateMessageBox({
-      type: 'question',
-      title: copy.removeInstallerTitle,
-      message: copy.updateInstalled(artifact.version),
-      detail: copy.removeInstallerQuestion(artifact.path),
-      buttons: [copy.deleteInstaller, copy.keepInstaller],
-      defaultId: 1,
-      cancelId: 1,
-      noLink: true,
-    })
-    await resolveDesktopUpdateArtifact(userDataPath, artifact, result.response === 0)
-  }
-
-  /** Start the downloaded NSIS installer visibly before releasing the current process. */
-  private async launchWindowsUpdateInstaller(installerPath: string): Promise<void> {
-    await new Promise<void>((resolve, reject) => {
-      let child: ReturnType<typeof spawn>
-      try {
-        child = spawn(installerPath, ['--updated', '--force-run'], {
-          detached: true,
-          stdio: 'ignore',
-          shell: false,
-          // UV_PROCESS_WINDOWS_HIDE also applies SW_HIDE to GUI processes,
-          // which leaves an interactive NSIS installer running invisibly.
-          windowsHide: false,
-        })
-      } catch (cause) {
-        reject(cause)
-        return
-      }
-      const fail = (cause: Error): void => { reject(cause) }
-      child.once('error', fail)
-      child.once('spawn', () => {
-        child.off('error', fail)
-        child.once('error', cause => {
-          this.logError(`dsh-plugin-desktop: update installer failed after launch: ${cause.message}`)
-        })
-        child.unref()
-        resolve()
-      })
-    })
   }
 
   /** Keep native-terminal launch failures visible in a packaged GUI process. */

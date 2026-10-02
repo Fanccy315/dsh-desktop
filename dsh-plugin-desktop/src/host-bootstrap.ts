@@ -13,7 +13,7 @@ import { DesktopActionsService } from './desktop-actions.ts'
 import { clearDesktopProfilePluginState, DesktopPluginsService } from './desktop-plugins.ts'
 import DesktopSettingsController from './desktop-settings-controller.ts'
 import { clearDesktopProfilePreferences, readDesktopProfilePreferences, writeDesktopProfilePreferences, type DesktopProfilePreferences, type DesktopProfilePreferencesStateV2 } from './profile-preferences.ts'
-import { clearDesktopProfileUsageHistory, type DesktopReleaseUserDataLocations } from './profile-channel-admission.ts'
+import { clearDesktopProfileUsageHistory } from './profile-channel-admission.ts'
 import { desktopInstallAnchor, type PreparedDesktopProfile } from './profile.ts'
 import { desktopLanBrowserUrls, desktopLoopbackBrowserUrl } from './desktop-network.ts'
 import { DESKTOP_LAN_HTTPS_CA_PATH, type DesktopLanHttpsRuntime } from './lan-https-runtime.ts'
@@ -32,8 +32,7 @@ export interface DesktopHostOptions {
   activeProfileName: string
   pluginManagementStatePath: string
   selectionStatePath: string
-  marketUserDataDir: string
-  releaseUserDataLocations: DesktopReleaseUserDataLocations
+  userDataDir: string
   desktopLaunchEnvironment: LaunchEnvironmentSnapshot
   /**
    * Proxy names the supervisor synthesized from the operating system's configuration, keyed
@@ -53,11 +52,11 @@ export async function bootDesktopHost(options: DesktopHostOptions, runtime: Desk
   bindHost: (host: DesktopStartupGenerationHost) => void, requestQuit: (code: number) => void,
 ): Promise<() => void> {
   const { prepared, profilePreferences, homeDir, activeProfileName, pluginManagementStatePath,
-    selectionStatePath, marketUserDataDir, releaseUserDataLocations, desktopLaunchEnvironment,
+    selectionStatePath, userDataDir, desktopLaunchEnvironment,
     desktopPnpmBootstrap } = options
   const createFreshDesktopProfile = (name: string) => {
     const created = createDesktopWebProfile(homeDir, name)
-    clearDesktopProfileUsageHistory(releaseUserDataLocations, created.dir)
+    clearDesktopProfileUsageHistory(userDataDir, created.dir)
     return created
   }
   const logSink = new LogFileSink(options.logDirectory, {
@@ -70,7 +69,7 @@ export async function bootDesktopHost(options: DesktopHostOptions, runtime: Desk
     // Setup saves from the Electron process after this Host booted; follow the
     // durable file so its choices are neither reverted nor hidden.
     const latestProfilePreferences = (): DesktopProfilePreferences =>
-      readDesktopProfilePreferences(marketUserDataDir, prepared.profile.dir) ?? currentProfilePreferences
+      readDesktopProfilePreferences(userDataDir, prepared.profile.dir) ?? currentProfilePreferences
     const enqueueProfilePreferencesWrite = (
       update: (current: DesktopProfilePreferences) => DesktopProfilePreferences,
     ): Promise<DesktopProfilePreferencesStateV2> => {
@@ -80,7 +79,7 @@ export async function bootDesktopHost(options: DesktopHostOptions, runtime: Desk
       const write = profilePreferencesWriteTail.then(async () => {
         const next = update(latestProfilePreferences())
         const stored = await writeDesktopProfilePreferences(
-          marketUserDataDir,
+          userDataDir,
           prepared.profile.dir,
           next,
         )
@@ -156,11 +155,11 @@ export async function bootDesktopHost(options: DesktopHostOptions, runtime: Desk
               currentProfileName: activeProfileName,
               clearDisabledState: () => clearDesktopProfilePluginState(pluginManagementStatePath, name),
               clearCheckpoint: async () => {
-                clearDesktopProfileUsageHistory(releaseUserDataLocations, profileDir)
+                clearDesktopProfileUsageHistory(userDataDir, profileDir)
               },
             }, name)
             try {
-              await clearDesktopProfilePreferences(marketUserDataDir, profileDir)
+              await clearDesktopProfilePreferences(userDataDir, profileDir)
             } catch (cause) {
               hostCtx.logger.error(
                 `${BIN_NAME}: deleted Profile left stale preference state: ${cause instanceof Error ? cause.message : String(cause)}`,

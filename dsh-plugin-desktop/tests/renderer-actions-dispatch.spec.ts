@@ -12,7 +12,6 @@ function fixture(overrides: Partial<DesktopRendererActionHandlers> = {}) {
     restartToRecovery: vi.fn(async () => {}),
     reload: vi.fn(),
     developerTools: vi.fn(),
-    checkForUpdates: vi.fn(async () => {}),
     exportDiagnostics: vi.fn(async () => {}),
     ...overrides,
   }
@@ -37,7 +36,6 @@ describe('desktop renderer action dispatch', () => {
 
   it.each([
     ['diagnostics', 'exportDiagnostics'],
-    ['check-for-updates', 'checkForUpdates'],
   ] as const)('awaits %s so the renderer can report its outcome', async (action, method) => {
     let release!: () => void
     const pending = new Promise<void>(resolve => { release = resolve })

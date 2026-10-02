@@ -58,7 +58,7 @@ import {
   effectiveDesktopWindowMaterial,
   type DesktopWindowMaterial,
 } from './window-material.ts'
-import { DESKTOP_PRODUCT_NAME } from './product-identity.ts'
+import { DESKTOP_PRODUCT_NAME, desktopProductVersion } from './product-identity.ts'
 import { watchPlatformLogin, type PlatformLoginAccount } from './platform-login.ts'
 import type { DesktopSetupWizardSettings } from './setup-wizard-settings.ts'
 import {
@@ -420,7 +420,7 @@ export function apply(ctx: Context, config: DesktopShellConfig): void {
         ctx.webServer.port,
         resolved.mode,
         runtime.platform,
-        runtime.updates.currentVersion,
+        desktopProductVersion(),
         material,
       )
       return runtime.schedule({

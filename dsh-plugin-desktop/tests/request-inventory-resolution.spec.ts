@@ -38,7 +38,7 @@ it('prepares request inventory for Desktop-owned entries and private-manifest pl
       assert.deepEqual(await collect([
         desktop.name, desktop.name + '/terminal', desktop.name + '/pnpm',
         desktop.name + '/diagnostics', desktop.name + '/notifications',
-        desktop.name + '/profiles', desktop.name + '/updates'
+        desktop.name + '/profiles'
       ]), [{ name: desktop.name, version: desktop.version }]);
       const plugin = join(root, 'node_modules', 'private-manifest-plugin');
       mkdirSync(plugin, { recursive: true });

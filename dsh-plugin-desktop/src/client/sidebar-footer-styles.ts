@@ -18,8 +18,7 @@ const STYLE_ID = 'dsh-desktop-sidebar-footer-styles'
  * are appended to head at apply time, so source order cannot settle a tie, and
  * `body [data-slot=…]` (0,1,1) beats any single-class rule a launcher may aim
  * at the slot. The children rule claims only flex participation, so every
- * launcher keeps its own seat — including `.dshMarketLauncher[data-wide='false']`
- * and its circular rail geometry.
+ * launcher keeps its own seat — including a narrow circular rail launcher.
  *
  * Geometry defers to upstream's own footer row (`SettingsRoot.module.css`
  * `.triggerRow`): a footer seat spans `100% + 4px` at `margin: -2px`, bleeding

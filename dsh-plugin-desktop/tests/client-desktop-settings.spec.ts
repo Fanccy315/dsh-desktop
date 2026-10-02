@@ -367,7 +367,6 @@ describe('Desktop settings API', () => {
         || path === desktopSettingsPaths.recoveryRestart
         || path === desktopSettingsPaths.rendererReload
         || path === desktopSettingsPaths.developerToolsToggle
-        || path === desktopSettingsPaths.updateCheck
         || path === desktopSettingsPaths.diagnosticsExport) {
         return json({ accepted: true })
       }
@@ -386,7 +385,6 @@ describe('Desktop settings API', () => {
     await expect(api.restartToRecovery()).resolves.toBeUndefined()
     await expect(api.reloadRenderer()).resolves.toBeUndefined()
     await expect(api.toggleDeveloperTools()).resolves.toBeUndefined()
-    await expect(api.checkForUpdates()).resolves.toBeUndefined()
     await expect(api.exportDiagnostics()).resolves.toBeUndefined()
 
     expect(fetcher.mock.calls.map(call => call[0])).toEqual([
@@ -399,7 +397,6 @@ describe('Desktop settings API', () => {
       desktopSettingsPaths.recoveryRestart,
       desktopSettingsPaths.rendererReload,
       desktopSettingsPaths.developerToolsToggle,
-      desktopSettingsPaths.updateCheck,
       desktopSettingsPaths.diagnosticsExport,
     ])
     expect(fetcher.mock.calls[1]?.[1]).toMatchObject({
@@ -431,10 +428,6 @@ describe('Desktop settings API', () => {
       method: 'POST',
       body: JSON.stringify({}),
     })
-    expect(fetcher.mock.calls[9]?.[1]).toMatchObject({
-      method: 'POST',
-      body: JSON.stringify({}),
-    })
   })
 
   it('keeps Desktop-owned actions on the Electron bridge, off the Host routes', async () => {
@@ -447,7 +440,6 @@ describe('Desktop settings API', () => {
     await expect(api.restartToRecovery()).resolves.toBeUndefined()
     await expect(api.reloadRenderer()).resolves.toBeUndefined()
     await expect(api.toggleDeveloperTools()).resolves.toBeUndefined()
-    await expect(api.checkForUpdates()).resolves.toBeUndefined()
     await expect(api.exportDiagnostics()).resolves.toBeUndefined()
 
     expect(invoke.mock.calls.flat()).toEqual([
@@ -456,7 +448,6 @@ describe('Desktop settings API', () => {
       'restart-recovery',
       'reload',
       'developer',
-      'check-for-updates',
       'diagnostics',
     ])
     expect(fetcher).not.toHaveBeenCalled()
@@ -501,7 +492,6 @@ describe('Desktop native action presentation', () => {
     restartToRecovery: vi.fn(async () => {}),
     reloadRenderer: vi.fn(async () => {}),
     toggleDeveloperTools: vi.fn(async () => {}),
-    checkForUpdates: vi.fn(async () => {}),
   }
   const t = (key: DesktopSettingsLocaleKey): string => en[key]
 
@@ -521,7 +511,6 @@ describe('Desktop native action presentation', () => {
   it('renders the Host-supplied version through the shadcn hover-card trigger', () => {
     const markup = renderToStaticMarkup(createElement(DesktopVersionControl, {
       version: '2.0.3',
-      checkForUpdates: api.checkForUpdates,
       t,
     }))
 
@@ -620,7 +609,7 @@ describe('Desktop native action presentation', () => {
     }
   })
 
-  it.each([DESKTOP_PACKAGE_NAME, 'dsh-desktop-next'])('keeps %s settings styles out of another plugin lifecycle', owner => {
+  it.each([DESKTOP_PACKAGE_NAME, 'third-party-plugin'])('keeps %s settings styles out of another plugin lifecycle', owner => {
     let connected = false
     const style = { id: '', dataset: {} as Record<string, string>, textContent: '', remove: () => { connected = false } }
     vi.stubGlobal('document', {
@@ -634,10 +623,10 @@ describe('Desktop native action presentation', () => {
     })
     try {
       const dispose = installDesktopSettingsStyles(owner)
-      // Model upstream claimStyles/removeOwnedStyles when a market is loaded
-      // and then disabled. An untagged sheet would disappear here.
-      if (!style.dataset.plugin) style.dataset.plugin = 'dshmarket'
-      if (style.dataset.plugin === 'dshmarket') style.remove()
+      // Model upstream claimStyles/removeOwnedStyles when another plugin loads
+      // and is then disabled. An untagged sheet would disappear here.
+      if (!style.dataset.plugin) style.dataset.plugin = 'third-party-plugin'
+      if (style.dataset.plugin === 'third-party-plugin') style.remove()
       expect(connected).toBe(true)
       expect(style.textContent).toContain('.dshDesktopSettingsChoice')
       dispose()

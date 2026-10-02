@@ -153,11 +153,6 @@ interface DesktopProfiles {
 interface DesktopPnpm {
   run(argv: readonly string[], signal?: AbortSignal): DesktopPnpmHandle
   runPlugin(argv: readonly string[], invokingDir: string, signal?: AbortSignal): DesktopPnpmHandle
-  runExternalMarketPluginInstall(
-    argv: readonly string[],
-    invokingDir: string,
-    signal?: AbortSignal,
-  ): DesktopPnpmHandle
 }
 
 interface DesktopPnpmHandle {
@@ -177,7 +172,6 @@ The actual stream type is Node's `Readable`. Every method validates non-empty, N
 | --- | --- | --- |
 | `run(argv, signal?)` | Runs the packaged pnpm JavaScript entry directly, with the active Profile directory as `cwd`. | Any caller-owned pnpm operation. |
 | `runPlugin(argv, invokingDir, signal?)` | Runs packaged `dsh plugin --profile <active>` with the supplied plugin argv from an absolute caller directory. | Compatibility adapter for plugin managers that rely on DSH bundle reconciliation. |
-| `runExternalMarketPluginInstall(argv, invokingDir, signal?)` | Uses the same packaged DSH plugin CLI but accepts only `add`, flag-style options, and one exact-version npm target. | Narrow compatibility adapter for the bundled `dshmarket` runtime. |
 
 New integrations should prefer direct pnpm argv, for example:
 
@@ -187,7 +181,7 @@ New integrations should prefer direct pnpm argv, for example:
 ['install', '--no-frozen-lockfile']
 ```
 
-For `run()`, the caller owns package identity policy, command construction, `dsh.profile.bundles` reconciliation, receipts, and post-operation validation. The compatibility adapters delegate bundle reconciliation to the packaged DSH CLI. None of the three methods snapshots, rolls back, retries, protects, or records package operations. Desktop recovery is independent: each healthy startup writes one of three rotating configuration checkpoints covering the active Profile plus shared Harness-home settings and patches, and the user may explicitly restore an exact slot from Recovery.
+For `run()`, the caller owns package identity policy, command construction, `dsh.profile.bundles` reconciliation, receipts, and post-operation validation. The compatibility adapters delegate bundle reconciliation to the packaged DSH CLI. None of the two methods snapshots, rolls back, retries, protects, or records package operations. Desktop recovery is independent: each healthy startup writes one of three rotating configuration checkpoints covering the active Profile plus shared Harness-home settings and patches, and the user may explicitly restore an exact slot from Recovery.
 
 The service starts at most one package operation per generation. A second call while one is active throws synchronously. It exposes output instead of choosing a progress UI, and it has no built-in timeout. The consumer owns deadlines, reads both streams, reports progress, calls `cancel()` or aborts its signal when needed, awaits `done`, and checks both `exitCode` and `signal`.
 
@@ -334,10 +328,6 @@ This fixture is under `tests/`, is absent from the npm `files` list and Electron
 8. Surface the generation-wide busy error instead of starting concurrent profile mutations.
 9. Cancel active work from the owning Cordis effect disposer and wait for its completion when coordinating teardown.
 10. Treat `desktopProfiles.select()` as a restart boundary. Do not continue assuming the selected target is live in the old generation.
-
-## Bundled dshmarket adapter
-
-The bundled `dshmarket` runtime consumes `runPlugin()` for ordinary plugin commands and `runExternalMarketPluginInstall()` for an exact npm add. The latter resolves the version before it crosses the service and rejects non-exact or multi-target requests. Both operations use the active Desktop Profile and the packaged DSH CLI; neither creates an install transaction, snapshot, receipt, automatic rollback, or recovery prompt.
 
 ## Stability boundary
 

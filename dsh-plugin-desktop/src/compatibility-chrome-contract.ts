@@ -3,7 +3,7 @@ import type { DesktopLocale, DesktopPlatform } from './runtime.ts'
 export const COMPATIBILITY_CHROME_CHANNEL = 'dsh-desktop:compatibility-chrome'
 export const COMPATIBILITY_CHROME_STATE = 'dsh-desktop:compatibility-chrome-state'
 
-export type CompatibilityChromeCommand = 'mode-compatibility' | 'state' | 'check-for-updates' | 'mode-extended' | 'mode-advanced' | 'terminal' | 'restart' | 'restart-recovery' | 'reload' | 'developer' | 'expand' | 'collapse'
+export type CompatibilityChromeCommand = 'mode-compatibility' | 'state' | 'mode-extended' | 'mode-advanced' | 'terminal' | 'restart' | 'restart-recovery' | 'reload' | 'developer' | 'expand' | 'collapse'
 
 export interface CompatibilityChromeState {
   readonly mode: 'compatibility' | 'extended'

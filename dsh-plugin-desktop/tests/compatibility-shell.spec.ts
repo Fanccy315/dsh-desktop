@@ -53,7 +53,6 @@ function fixture(platform: 'darwin' | 'win32' = 'darwin', mode: 'compatibility' 
     locale: () => 'en', version: '2.0.3',
     openTerminal: vi.fn(), restart: vi.fn(async () => {}), restartToRecovery: vi.fn(async () => {}),
     reload: vi.fn(), developerTools: vi.fn(),
-    checkForUpdates: vi.fn(async () => {}),
     exportDiagnostics: vi.fn(async () => {}),
   }
   const spec = { mode, material, requestModeChange: vi.fn(async () => {}) } as unknown as DesktopShellSpec
@@ -178,7 +177,6 @@ describe('isolated compatibility shell', () => {
     const { shell, handler, event, actions, spec } = fixture()
     await shell.load()
     await handler(event(), 'terminal')
-    await handler(event(), 'check-for-updates')
     await handler(event(), 'mode-compatibility')
     expect(spec.requestModeChange).toHaveBeenCalledWith('compatibility')
     await handler(event(), 'mode-extended')
@@ -188,7 +186,7 @@ describe('isolated compatibility shell', () => {
     await handler(event(), 'restart-recovery')
     await handler(event(), 'reload')
     await handler(event(), 'developer')
-    for (const action of ['openTerminal', 'checkForUpdates', 'restart', 'restartToRecovery', 'reload', 'developerTools'] as const) {
+    for (const action of ['openTerminal', 'restart', 'restartToRecovery', 'reload', 'developerTools'] as const) {
       expect(actions[action]).toHaveBeenCalledOnce()
     }
     expect(() => handler(event(), 'version')).toThrow('unsupported')
@@ -196,14 +194,12 @@ describe('isolated compatibility shell', () => {
     shell.dispose()
   })
 
-  it('returns persistence and update failures to the original inline error UI', async () => {
+  it('returns persistence failures to the original inline error UI', async () => {
     const { shell, handler, event, spec, actions } = fixture()
     await shell.load()
     vi.mocked(spec.requestModeChange).mockRejectedValueOnce(new Error('write failed'))
     await expect(handler(event(), 'mode-advanced')).rejects.toThrow('write failed')
     expect(actions.restart).not.toHaveBeenCalled()
-    vi.mocked(actions.checkForUpdates).mockRejectedValueOnce(new Error('update failed'))
-    await expect(handler(event(), 'check-for-updates')).rejects.toThrow('update failed')
     shell.dispose()
   })
 

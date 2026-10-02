@@ -68,7 +68,7 @@ afterEach(() => {
 })
 
 describe('Desktop Profile preferences', () => {
-  it('treats a retired version-one state as absent instead of throwing', () => {
+  it('rejects an unknown state version instead of accepting stale fields', () => {
     const userData = temporaryDirectory('dsh-profile-preferences-migration-')
     const profile = temporaryDirectory('dsh-profile-preferences-migration-profile-')
     writeRawState(userData, profile, {
@@ -78,11 +78,9 @@ describe('Desktop Profile preferences', () => {
       openBrowser: true,
       networkExposure: 'lan',
       notifications: PREFERENCES.notifications,
-      market: 'community-market',
-      aaEnabled: false,
       recordedAt: RECORDED_AT,
     })
-    expect(readDesktopProfilePreferences(userData, profile)).toBeUndefined()
+    expect(() => readDesktopProfilePreferences(userData, profile)).toThrow('unsupported version')
   })
 
   it('reads saved five-switch notification preferences with schedule switches enabled', () => {

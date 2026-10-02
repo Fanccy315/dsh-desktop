@@ -35,6 +35,10 @@ const DESKTOP_SHELL_PATCH_ENTRY = Object.freeze({
 })
 
 const BIN_NAME = 'dsh-plugin-desktop-profile-smoke'
+/** The Desktop product version the renderer URL must carry, straight from the manifest. */
+const DESKTOP_PRODUCT_VERSION = JSON.parse(
+  readFileSync(new URL('../package.json', import.meta.url), 'utf8'),
+).version
 const HOST_SERVICE_PLUGIN_NAME = 'dsh-desktop-host-services-smoke-plugin'
 const HOST_SERVICE_PROBE_KEY = 'desktopHostServiceProbe'
 let ordinaryBrowserEnabled = false
@@ -125,17 +129,6 @@ try {
   const runtime = {
     platform: 'win32',
     locale: 'en',
-    updates: {
-      isPackaged: false,
-      canDownload: true,
-      currentVersion: '2.0.0',
-      statePath: join(home, 'update-state.json'),
-      request: async () => { throw new Error('profile smoke must not perform update requests') },
-      confirmDownload: async () => false,
-      showManualCheckResult: async () => {},
-      downloadAndOpen: async () => {},
-      notify: () => {},
-    },
     schedule(spec) {
       mountedSpec = spec
       return async () => {}
@@ -289,7 +282,7 @@ try {
     throw new Error(`assembled Windows browse picker listed ${listing.path} instead of ${home}`)
   }
 
-  const expectedUrl = `http://127.0.0.1:${String(ctx.webServer.port)}/?dsh-desktop-mode=advanced&dsh-desktop-platform=win32&dsh-desktop-version=2.0.0&dsh-desktop-material=off`
+  const expectedUrl = `http://127.0.0.1:${String(ctx.webServer.port)}/?dsh-desktop-mode=advanced&dsh-desktop-platform=win32&dsh-desktop-version=${DESKTOP_PRODUCT_VERSION}&dsh-desktop-material=off`
   if (mountedSpec?.url !== expectedUrl) {
     throw new Error(`desktop plugin produced an unexpected renderer URL: ${String(mountedSpec?.url)}`)
   }
@@ -308,9 +301,6 @@ try {
     .find(entry => String(entry.ns) === DESKTOP_SETTINGS_ENTRY_ID)?.value
   if (desktopSettings?.mode !== 'advanced') {
     throw new Error('assembled Host settings are missing the advanced desktop-shell mode')
-  }
-  if (!trayItems.some(item => item.label() === 'Check for Updates…')) {
-    throw new Error('assembled desktop profile is missing the update tray command')
   }
   if (process.platform !== 'linux'
     && !trayItems.some(item => item.label() === 'Open DSH Terminal')) {

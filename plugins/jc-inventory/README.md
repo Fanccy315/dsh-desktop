@@ -1,7 +1,7 @@
 # dsh-plugin-jc-inventory — JC 公司库管智能体（DSH Desktop 内置插件）
 
 独立 Cordis 插件包（SPEC：仓库根 `docs/SPEC.md` v2）。不进上游子模块、
-不发布 npm；经 `dsh-plugin-desktop(-beta)` 依赖闭包（`workspace:*`）+
+不发布 npm；经 `dsh-plugin-desktop` 依赖闭包（`workspace:*`）+
 launcher Loader patch **随安装包内置**——每个 profile、每次 Host
 generation 都加载，用户不可误删（同 desktop-shell / webserver 的内置模式）。
 旧的 `file:` 安装进 profile 与 `dsh.bundle.patch` 已废弃。
@@ -9,10 +9,9 @@ generation 都加载，用户不可误删（同 desktop-shell / webserver 的内
 ## 内置链路（SPEC §3「内置方式」）
 
 1. 根 `package.json` 的 `workspaces` 已登记 `plugins/jc-inventory`（本包，正式包名）。
-2. `dsh-plugin-desktop-beta` 与 `dsh-plugin-desktop` 的 dependencies 声明
-   `dsh-plugin-jc-inventory: workspace:*`（beta 先行、同步 stable，
-   `corepack yarn check:desktop-variants` 门禁）。
-3. `dsh-plugin-desktop(-beta)/src/profile.ts` launcher patch 组装处插入
+2. `dsh-plugin-desktop` 的 dependencies 声明
+   `dsh-plugin-jc-inventory: workspace:*`。
+3. `dsh-plugin-desktop/src/profile.ts` launcher patch 组装处插入
    `{ insert: [{ id: 'jc-inventory', name: 'dsh-plugin-jc-inventory' }] }`。
 4. 原生依赖（如后续引入 better-sqlite3）需走仓库 asar 归档策略；
    当前 W1 无原生依赖（W2 演示库拟用 `node:sqlite`）。
@@ -48,7 +47,7 @@ data/                  # 生成的 jc.db（gitignore）
 # 仓库根（dsh-desktop）：
 corepack yarn install --immutable     # 前置：git submodule update --init --recursive
 corepack yarn dev                     # 开发：Desktop 启动即内置加载本插件
-corepack yarn check                   # 门禁（含 check:desktop-variants）
+corepack yarn check                   # 门禁
 corepack yarn build                   # 出包
 ```
 
@@ -65,8 +64,8 @@ W1 验收：`yarn dev` 启动后 Web UI 对话可调用 `inv_adapter_status`，
 
 ## 里程碑
 
-- **W1（当前）**：包骨架接入内置链路（workspaces + 变体依赖 + launcher
-  patch，过 `check:desktop-variants`）；数据契约定稿（contract.ts + 探针）；
+- **W1（当前）**：包骨架接入内置链路（workspaces + 依赖 + launcher
+  patch）；数据契约定稿（contract.ts + 探针）；
   registry + data-service + sqlite-demo 占位 + `inv_adapter_status`。
 - W2：迁移业务层为只依赖契约；sqlite-demo 完整实现 + jc.db 生成器。
 - W3：元流程 MVP（内省 → 生成 → 校验 → 热加载）。

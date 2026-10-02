@@ -9,8 +9,6 @@ import { fileURLToPath } from 'node:url'
 const root = resolve(import.meta.dirname, '..')
 export const ICON_PACKAGES = Object.freeze({
   stable: 'dsh-plugin-desktop',
-  beta: 'dsh-plugin-desktop-beta',
-  next: 'dsh-desktop-next',
 })
 const outputs = ['app-icon.png', 'app-icon-mac.png', 'app-icon.ico', 'app-icon.icns']
 const hash = bytes => createHash('sha256').update(bytes).digest('hex')
@@ -56,7 +54,7 @@ function developerDirectory() {
 async function main() {
   const args = process.argv.slice(2)
   const requested = args.includes('--channel') ? args[args.indexOf('--channel') + 1] : 'all'
-  if (requested !== 'all' && !Object.hasOwn(ICON_PACKAGES, requested)) throw new Error('Use --channel stable, beta, next, or all')
+  if (requested !== 'all' && !Object.hasOwn(ICON_PACKAGES, requested)) throw new Error('Use --channel stable or all')
   const selected = Object.entries(ICON_PACKAGES).filter(([channel]) => requested === 'all' || requested === channel)
   if (args.includes('--check')) {
     for (const [channel, name] of selected) {
@@ -72,10 +70,10 @@ async function main() {
   // Scoped to this command and its children; do not change xcode-select globally.
   process.env.DEVELOPER_DIR = developer
   process.env.PATH = `${join(developer, 'usr/bin')}${delimiter}${process.env.PATH ?? ''}`
-  const require = createRequire(join(root, 'dsh-plugin-desktop-beta/package.json'))
+  const require = createRequire(join(root, 'dsh-plugin-desktop/package.json'))
   const { generateAssetCatalogForIcon } = require('app-builder-lib/out/util/macosIconComposer.js')
-  const { generateMacAppIcon } = await import('../dsh-plugin-desktop-beta/scripts/generate-mac-app-icon.mjs')
-  const { generateWindowsAppIcon } = await import('../dsh-plugin-desktop-beta/scripts/generate-windows-app-icon.mjs')
+  const { generateMacAppIcon } = await import('../dsh-plugin-desktop/scripts/generate-mac-app-icon.mjs')
+  const { generateWindowsAppIcon } = await import('../dsh-plugin-desktop/scripts/generate-windows-app-icon.mjs')
 
   for (const [channel, name] of selected) {
     const build = join(root, name, 'build')

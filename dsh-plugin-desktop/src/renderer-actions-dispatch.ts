@@ -17,8 +17,6 @@ export interface DesktopRendererActionHandlers {
   reload(): void
   /** Toggle Developer Tools for the mounted renderer. */
   developerTools(): void
-  /** Run the interactive update check contributed to the native menus. */
-  checkForUpdates(): Promise<void>
   /** Export diagnostics through the native confirmation and reveal flow. */
   exportDiagnostics(): Promise<void>
 }
@@ -53,7 +51,6 @@ export function createDesktopRendererActionDispatcher(
       case 'terminal': actions.openTerminal(); return
       case 'developer': actions.developerTools(); return
       case 'diagnostics': await actions.exportDiagnostics(); return
-      case 'check-for-updates': await actions.checkForUpdates(); return
       case 'restart': acknowledge('restart Desktop', () => actions.restart()); return
       case 'restart-recovery':
         acknowledge('restart Desktop in recovery mode', () => actions.restartToRecovery())

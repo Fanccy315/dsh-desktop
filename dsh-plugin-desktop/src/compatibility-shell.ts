@@ -152,7 +152,6 @@ export class CompatibilityShell {
       case 'expand': this.expanded = true; this.resize(); return
       case 'collapse': this.collapse(); return
       case 'terminal': this.actions.openTerminal(); return
-      case 'check-for-updates': return this.actions.checkForUpdates()
       case 'mode-compatibility': return this.spec.requestModeChange('compatibility')
       case 'mode-extended': return this.spec.requestModeChange('extended')
       case 'mode-advanced': return this.spec.requestModeChange('advanced')

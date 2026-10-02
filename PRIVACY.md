@@ -19,7 +19,7 @@ This policy applies to:
 - the official website, version-check service, and download redirects under `https://www.dshdesktop.cn/`; and
 - privacy requests, support email, or issue reports that you voluntarily send to the project maintainers.
 
-This policy does not control processing performed by third-party forks, modified builds, third-party distributors, model providers, plugins, marketplace sources, or package services. If a third-party build still calls the hard-coded official `dshdesktop.cn` endpoints, this policy applies to the information those official endpoints actually receive, but not to other processing by that build or its distributor.
+This policy does not control processing performed by third-party forks, modified builds, third-party distributors, model providers, plugins, or package services. If a third-party build still calls the hard-coded official `dshdesktop.cn` endpoints, this policy applies to the information those official endpoints actually receive, but not to other processing by that build or its distributor.
 
 ## 2. Summary
 
@@ -28,7 +28,7 @@ This policy does not control processing performed by third-party forks, modified
 - Packaged macOS and Windows builds check for updates by default and send a locally generated, persistently stored random installation UUID. This is a pseudonymous identifier that may qualify as personal data under applicable law. It is not a hardware ID and does not guarantee one value per physical machine.
 - Installer downloads do not receive that installation UUID from Desktop, although the website, download host, and network infrastructure still receive ordinary network metadata.
 - Diagnostic archives are created locally only when you export them and are never uploaded automatically by DSH Desktop.
-- Model services, plugins, marketplace sources, and package services that you choose process data under their own terms. They do not become subject to this policy merely because DSH Desktop can connect to them.
+- Model services, plugins, and package services that you choose process data under their own terms. They do not become subject to this policy merely because DSH Desktop can connect to them.
 
 ## 3. Official version checks
 
@@ -100,7 +100,7 @@ The following information remains on your device by default rather than being up
 
 | Local information | Purpose and retention |
 | --- | --- |
-| Profiles, Desktop preferences, window preferences, plugin configuration, and marketplace source selection | Provide your configured local experience; retained until you delete it in the application, manually delete the relevant data, or reset application data. |
+| Profiles, Desktop preferences, window preferences, and plugin configuration | Provide your configured local experience; retained until you delete it in the application, manually delete the relevant data, or reset application data. |
 | Sessions, prompts, responses, tool records, and workspace information | Support local DSH features. Session records are stored under `$DSH_HOME/sessions` by default. The current persistence backend has no deletion API, so they accumulate until you remove them externally. Content may be sent to your chosen services when you invoke a model or tool, as described in Section 6. |
 | Attachments and image caches | Stored under `$DSH_HOME/attachments/v1` by default. The current implementation has no reference-aware garbage collection, so they remain until you delete them manually. |
 | Model and service credentials | May come from the inherited environment, a project `.env`, `$DSH_HOME/.env`, or `$DSH_HOME/.credentials.yaml`. The managed YAML uses a `0600` file below a `0700` directory on platforms with POSIX permissions, but it is not encrypted. Tools or models running as the same operating-system user can deliberately read it. |
@@ -126,38 +126,17 @@ Upstream DSH also maintains an `.anonymous-user-id` that is separate from the De
 
 The default composition also provides DeepSeek `web_search`. When you invoke it, it sends the API key, original search term inside a fixed prompt, model and token/use limits, and standard request metadata to the configured DeepSeek Messages endpoint. The webpage `fetch` tool is disabled by default.
 
-### 6.2 Community Market and package services
+### 6.2 Software package services
 
-Community Market does not require a remote source to be selected by default. After you select and use a source, the Host sends requests to it. Current built-in optional sources include:
+When you preview or confirm a plugin installation, Desktop may contact `registry.npmjs.org`, `raw.githubusercontent.com`, GitHub, or a registry you configure to retrieve package names, versions, manifests, repository or commit evidence, and dependencies. When profile dependencies need to be materialized at startup, the bundled package manager may also contact npm, GitHub, dependency hosts, or Electron's download service. Installed plugins and their dependencies run locally with your permissions and may independently read local data or access the network. An **Installable** result is not a privacy or security review.
 
-- DSH 1024Store: `deepseek1024.com`;
-- dshfind: `api.dshfind.com`; and
-- a standard catalog source that you configure and confirm.
-
-These sources receive the IP address, time, a fixed Market User-Agent, and the requested catalog resource. Depending on the capabilities of the selected source, a request can also include search terms, categories, sort order, language, page numbers, or cursors. Desktop's Host may fetch plugin images from the catalog source, GitHub, or an allowed image host, allowing the recipient to infer which plugin or publisher you are viewing.
-
-When you preview or confirm a plugin installation, Desktop may also contact `registry.npmjs.org`, `raw.githubusercontent.com`, GitHub, or a registry you configure to retrieve package names, versions, manifests, repository or commit evidence, and dependencies. When profile dependencies need to be materialized at startup, the bundled package manager may also contact npm, GitHub, dependency hosts, or Electron's download service. Installed plugins and their dependencies run locally with your permissions and may independently read local data or access the network. Catalog inclusion and an **Installable** result are not privacy or security reviews.
-
-### 6.3 dsh-market
-
-If you select `dsh-market` in Setup or settings, opening the market, checking for updates, or viewing plugin content can contact `awesome-dsh-plugin.com`, the npm Registry, the GitHub API, `raw.githubusercontent.com`, GitHub avatar services, and `images.weserv.nl`. These recipients receive the IP address, time, requested resource, and relevant plugin, package, or repository identifiers; an image proxy also receives the original image URL. Installation or update still requires your confirmation and can then contact addresses declared by plugin dependencies. These requests do not include Desktop's `X-DSH-Desktop-Installation-Id`.
-
-`dsh-market` also provides profile backups that you trigger manually or after you explicitly enable optional automatic backup:
-
-- a local export only creates a file on your device;
-- a WebDAV upload always sends a complete backup. Automatic backup is off by default; after you enable it, an upload can occur automatically when its 24-hour interval condition is met. The URL, username, automatic-backup setting, and last-success time are stored in browser local storage. After entry, the password remains in current renderer memory until the component unmounts or the page refreshes and is sent temporarily to the local Host for each request; `dsh-market` does not write the password to local storage or disk;
-- a GitHub Gist backup uses a GitHub token with `api.github.com` to verify access and create, update, or read a secret Gist. A secret Gist is not publicly listed, but anyone with its URL can read it. A manually entered token remains in session memory, while `DSH_GITHUB_TOKEN` or a locally authenticated `gh` can also be used. The Gist ID and WebDAV URL or username may remain in browser local storage; and
-- a complete backup contains `package.json` and profile configuration files. It excludes `node_modules`, the lockfile, and Market cache, but may include `config.toml`, `.env`, API keys, tokens, or other secrets without masking. Local and WebDAV exports always use a complete backup; only a Gist export can select plugins and let you decide whether to include configuration.
-
-Upload a backup only to a WebDAV service or GitHub account you trust. The selected service processes the backup, credentials, and network metadata under its own policy.
-
-### 6.4 Optional upstream telemetry
+### 6.3 Optional upstream telemetry
 
 Upstream DSH session telemetry keeps the upstream default of `FEEDBACK_ONLY` in Desktop's default composition: ordinary use uploads no session content, and only after you explicitly submit feedback in a session is that session's raw log up to the feedback sent, with the upstream anonymous user ID (stored as `.anonymous-user-id` in the DSH data directory; delete it to reset), to `https://dsh-otel-collector.deepseeksvc.com/v1/logs` or the endpoint configured in `DSH_TELEMETRY_OTLP_URL`. If you or a deployment operator explicitly sets `DSH_TELEMETRY_MODE` to `FULL`, session telemetry is sent continuously during ordinary use; setting `DSH_TELEMETRY_DISABLED` to any non-empty value makes Desktop turn the component off. That processing is controlled by the upstream configuration and recipient policy and is not the Anywhere Labs official update service.
 
 Upstream also provides Desktop product analytics (`product-analytics` and `desktop-product-telemetry`) for any Profile named `desktop`, which would send a device ID, a user ID when signed in to a DeepSeek account, OS and app versions, and interface interaction events to DeepSeek. DSH Desktop turns both off at startup, and the official distribution does not send these analytics.
 
-### 6.5 External links
+### 6.4 External links
 
 External HTTP, HTTPS, and email links in the application or documentation are handed to the system browser or email client. The destination's policy applies after you open it.
 

@@ -19,7 +19,6 @@ const api = {
   restartToRecovery: () => invoke('restart-recovery'),
   reloadRenderer: () => invoke('reload'),
   toggleDeveloperTools: () => invoke('developer'),
-  checkForUpdates: () => invoke('check-for-updates'),
 }
 
 export function Chrome() {

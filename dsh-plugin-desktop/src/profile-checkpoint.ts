@@ -50,7 +50,6 @@ const LEGACY_PROFILE_CHECKPOINT_FILES = [
   'pnpm-lock.yaml',
   'pnpm-workspace.yaml',
   'cordis.patch.yml',
-  '.dsh-market/state.json',
 ] as const
 
 /** Files covered by unified startup recovery. Optional files retain absence. */
@@ -68,7 +67,6 @@ const FILE_LIMITS: Record<DesktopProfileCheckpointFilename, number> = {
   'pnpm-lock.yaml': 32 * 1024 * 1024,
   'pnpm-workspace.yaml': 1 * 1024 * 1024,
   'cordis.patch.yml': 1 * 1024 * 1024,
-  '.dsh-market/state.json': 1 * 1024 * 1024,
   'home/settings.yaml': 4 * 1024 * 1024,
   'home/cordis.patch.yml': 1 * 1024 * 1024,
 }
@@ -113,7 +111,7 @@ interface ProfileCheckpointManifestMetadata {
   readonly appVersion: string
 }
 
-export type DesktopProfileCheckpointReleaseChannel = 'stable' | 'beta'
+export type DesktopProfileCheckpointReleaseChannel = 'stable'
 
 export interface ProfileCheckpointManifestV2 extends ProfileCheckpointManifestMetadata {
   readonly version: 2
@@ -251,7 +249,7 @@ function assertAppVersion(value: string): string {
 }
 
 function assertReleaseChannel(value: string): DesktopProfileCheckpointReleaseChannel {
-  if (value !== 'stable' && value !== 'beta') fail('invalid Desktop release channel')
+  if (value !== 'stable') fail('invalid Desktop release channel')
   return value
 }
 

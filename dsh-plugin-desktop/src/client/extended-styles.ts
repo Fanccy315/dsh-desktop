@@ -180,29 +180,6 @@ body[data-dsh-desktop-mode="extended"]:not([data-dsh-desktop-material="off"]) {
   font-size: 12px;
   font-weight: 600;
 }
-.dshDesktopVersionCheckButton {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 7px;
-  min-height: 30px;
-  padding: 5px 9px;
-  border: 1px solid var(--dsw-alias-border-l2);
-  border-radius: 7px;
-  background: color-mix(in srgb, var(--dsw-alias-bg-base) 48%, transparent);
-  color: var(--dsw-alias-label-primary);
-  cursor: pointer;
-  font: inherit;
-  font-size: 12px;
-  -webkit-app-region: no-drag;
-}
-.dshDesktopVersionCheckButton:hover:not(:disabled) { background: var(--dsw-alias-interactive-bg-hover); }
-.dshDesktopVersionCheckButton:focus-visible {
-  outline: 2px solid var(--dsw-alias-brand-primary);
-  outline-offset: 1px;
-}
-.dshDesktopVersionCheckButton:disabled { cursor: default; opacity: .55; }
-.dshDesktopVersionCheckButton svg { width: 14px; height: 14px; stroke-width: 1.8; }
 .dshDesktopVersionCheckError {
   color: var(--dsw-alias-state-error-primary);
   font-size: 11px;

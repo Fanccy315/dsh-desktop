@@ -17,33 +17,6 @@ export interface DesktopNativeCopy {
   readonly openTerminal: string
   readonly restart: string
   readonly dismiss: string
-  readonly updateAvailableTitle: string
-  readonly updateAvailableMessage: (version: string) => string
-  readonly downloadUpdate: string
-  readonly installStableAlongsideBeta: string
-  readonly download: string
-  readonly later: string
-  readonly updateCheckFailedTitle: string
-  readonly updateCheckFailedMessage: string
-  readonly tryAgainLater: string
-  readonly upToDateTitle: string
-  readonly upToDateMessage: string
-  readonly installedVersion: (version: string) => string
-  readonly installerUnavailable: string
-  readonly updateDownloadedTitle: string
-  readonly updateReady: (version: string) => string
-  readonly macInstallInstructions: string
-  readonly windowsInstallQuestion: string
-  readonly restartAndInstall: string
-  readonly saveInstallerTitle: string
-  readonly saveAndDownload: string
-  readonly diskImage: string
-  readonly windowsInstaller: string
-  readonly removeInstallerTitle: string
-  readonly updateInstalled: (version: string) => string
-  readonly removeInstallerQuestion: (path: string) => string
-  readonly deleteInstaller: string
-  readonly keepInstaller: string
   readonly terminalErrorTitle: string
   readonly terminalErrorMessage: string
   readonly diagnosticsErrorTitle: string
@@ -96,33 +69,6 @@ const COPY: Record<DesktopLocale, DesktopNativeCopy> = {
     openTerminal: 'Open DSH Terminal',
     restart: 'Restart DSH Desktop',
     dismiss: 'Dismiss',
-    updateAvailableTitle: 'DSH Desktop Update Available',
-    updateAvailableMessage: version => `DSH Desktop ${version} is available.`,
-    downloadUpdate: 'Download this update now?',
-    installStableAlongsideBeta: 'Install the stable edition alongside DSH Desktop Beta? The Beta app will remain installed.',
-    download: 'Download',
-    later: 'Later',
-    updateCheckFailedTitle: 'Unable to Check for Updates',
-    updateCheckFailedMessage: 'Could not retrieve update information.',
-    tryAgainLater: 'Please try again later.',
-    upToDateTitle: 'DSH Desktop Is Up to Date',
-    upToDateMessage: 'You are using the latest version.',
-    installedVersion: version => `Installed version: ${version}`,
-    installerUnavailable: 'This version cannot download installers from within the app.',
-    updateDownloadedTitle: 'DSH Desktop Update Downloaded',
-    updateReady: version => `DSH Desktop ${version} is ready to install.`,
-    macInstallInstructions: 'The disk image has opened. Replace DSH Desktop in Applications, then reopen it.',
-    windowsInstallQuestion: 'Restart DSH Desktop and run the installer now?',
-    restartAndInstall: 'Restart and Install',
-    saveInstallerTitle: 'Save Update Installer',
-    saveAndDownload: 'Save and Download',
-    diskImage: 'Disk Image',
-    windowsInstaller: 'Windows Installer',
-    removeInstallerTitle: 'Remove Update Installer',
-    updateInstalled: version => `DSH Desktop ${version} has been installed.`,
-    removeInstallerQuestion: path => `Delete the downloaded installer to free disk space?\n\n${path}`,
-    deleteInstaller: 'Delete Installer',
-    keepInstaller: 'Keep Installer',
     terminalErrorTitle: 'Unable to Open DSH Terminal',
     terminalErrorMessage: 'Could not start the terminal. Please try again.',
     diagnosticsErrorTitle: 'Unable to Export Diagnostics',
@@ -173,33 +119,6 @@ const COPY: Record<DesktopLocale, DesktopNativeCopy> = {
     openTerminal: '打开 DSH 终端',
     restart: '重启 DSH Desktop',
     dismiss: '关闭',
-    updateAvailableTitle: 'DSH Desktop 有可用更新',
-    updateAvailableMessage: version => `DSH Desktop ${version} 已可用。`,
-    downloadUpdate: '现在下载此更新？',
-    installStableAlongsideBeta: '是否同时安装稳定版？DSH Desktop Beta 将继续保留。',
-    download: '下载',
-    later: '稍后',
-    updateCheckFailedTitle: '无法检查更新',
-    updateCheckFailedMessage: '未能获取更新信息。',
-    tryAgainLater: '请稍后重试。',
-    upToDateTitle: 'DSH Desktop 已是最新版本',
-    upToDateMessage: '当前已是最新版本。',
-    installedVersion: version => `当前版本：${version}`,
-    installerUnavailable: '当前版本不支持在应用内下载安装包。',
-    updateDownloadedTitle: 'DSH Desktop 更新已下载',
-    updateReady: version => `DSH Desktop ${version} 已可安装。`,
-    macInstallInstructions: '磁盘映像已打开。请替换“应用程序”中的 DSH Desktop，然后重新打开。',
-    windowsInstallQuestion: '现在重启 DSH Desktop 并运行安装程序？',
-    restartAndInstall: '重启并安装',
-    saveInstallerTitle: '保存更新安装包',
-    saveAndDownload: '保存并下载',
-    diskImage: '磁盘映像',
-    windowsInstaller: 'Windows 安装程序',
-    removeInstallerTitle: '删除更新安装包',
-    updateInstalled: version => `DSH Desktop ${version} 已安装。`,
-    removeInstallerQuestion: path => `是否删除下载的安装包以释放磁盘空间？\n\n${path}`,
-    deleteInstaller: '删除安装包',
-    keepInstaller: '保留安装包',
     terminalErrorTitle: '无法打开 DSH 终端',
     terminalErrorMessage: '未能启动终端。请重试。',
     diagnosticsErrorTitle: '无法导出诊断信息',

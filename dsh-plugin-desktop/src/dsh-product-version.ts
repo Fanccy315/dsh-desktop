@@ -2,7 +2,7 @@
 
 import { readFileSync, statSync } from 'node:fs'
 import { createRequire } from 'node:module'
-import { parseSemVer } from './update-checker.ts'
+import { parseSemVer } from './semver.ts'
 
 const BIN_NAME = 'dsh-plugin-desktop'
 const DSH_PACKAGE_NAME = '@deepseek-ai/dsh'

@@ -644,7 +644,6 @@ describe('packaged desktop runtime verification', () => {
     'lib/diagnostic-export-worker.js',
     'lib/packaged-runtime-smoke.js',
     'lib/pnpm.js',
-    'lib/update-download.js',
     ...REQUIRED_AGENT_PRESET_RUNTIME_ENTRIES,
     'node_modules/open/index.js',
   ])('fails loud when required ASAR entry %s is absent', (missing) => {

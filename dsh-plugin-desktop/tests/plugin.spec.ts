@@ -38,6 +38,7 @@ import {
 import type { DesktopRuntime, DesktopShellSpec } from '../src/runtime.ts'
 import type { DesktopPlatformLoginRequest, PlatformLoginAccount } from '../src/platform-login.ts'
 import { createDesktopBrowserAccess } from '../src/desktop-browser-access.ts'
+import { desktopProductVersion } from '../src/product-identity.ts'
 import { DESKTOP_LAN_HTTPS_CA_PATH, DesktopLanHttpsRuntime } from '../src/lan-https-runtime.ts'
 import { RENDERER_BOOT_REPORT_PATH, type RendererBootReport } from '../src/renderer-boot-contract.ts'
 
@@ -205,17 +206,6 @@ function createHarness(
   const runtime: DesktopRuntime = {
     platform,
     locale: 'en',
-    updates: {
-      isPackaged: false,
-      canDownload: platform === 'darwin' || platform === 'win32',
-      currentVersion: '2.0.0',
-      statePath: '/tmp/dsh-desktop-update-state.json',
-      request: async () => new Response(null, { status: 304 }),
-      confirmDownload: async () => false,
-      showManualCheckResult: async () => {},
-      downloadAndOpen: async () => {},
-      notify: () => {},
-    },
     schedule: (spec) => {
       shell = spec
       return async () => {}
@@ -457,7 +447,7 @@ describe('desktop Host plugin', () => {
     expect(loaderAwait).not.toHaveBeenCalled()
     expect(harness.shell()).toEqual(expect.objectContaining({
       mode: 'compatibility',
-      url: 'http://127.0.0.1:43120/?dsh-desktop-mode=compatibility&dsh-desktop-platform=darwin&dsh-desktop-version=2.0.0&dsh-desktop-material=transparent&dsh-desktop-titlebar-inset=36',
+      url: `http://127.0.0.1:43120/?dsh-desktop-mode=compatibility&dsh-desktop-platform=darwin&dsh-desktop-version=${desktopProductVersion()}&dsh-desktop-material=transparent&dsh-desktop-titlebar-inset=36`,
       authenticationUrl: 'http://127.0.0.1:43120/?token=test-token',
       productName: 'DSH Desktop',
       windowTitle: 'DeepSeek Harness Desktop',

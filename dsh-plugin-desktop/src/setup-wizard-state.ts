@@ -15,7 +15,7 @@ import {
 import type { Stats } from 'node:fs'
 import { dirname, isAbsolute, join, resolve } from 'node:path'
 import { writeFileAtomic } from '@deepseek-ai/dsh-atomic-write'
-import { parseSemVer } from './update-checker.ts'
+import { parseSemVer } from './semver.ts'
 
 const BIN_NAME = 'dsh-plugin-desktop'
 const LEGACY_STATE_VERSION = 1

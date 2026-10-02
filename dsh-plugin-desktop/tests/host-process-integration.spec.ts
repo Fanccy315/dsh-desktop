@@ -6,7 +6,6 @@ import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { expect, it } from 'vitest'
 import { prepareDesktopProfile } from '../src/profile.ts'
-import { desktopReleaseUserDataLocations } from '../src/profile-channel-admission.ts'
 import { installDesktopPnpmRuntime } from '../src/desktop-runtime-environment.ts'
 import { HostRpc } from '../src/host-rpc.ts'
 import { bindNativeRuntime, runtimeSnapshot } from '../src/host-runtime-bridge.ts'
@@ -71,8 +70,7 @@ it('boots a separate Web Host with client plugins', async () => {
       prepared, profilePreferences: { mode: 'advanced', openBrowser: false, networkExposure: 'loopback',
         macosMaterial: 'auto', windowsMaterial: 'auto', notifications: { enabled: false } },
       homeDir: home, activeProfileName: prepared.profile.name, pluginManagementStatePath: join(home, 'plugins.json'),
-      selectionStatePath: join(home, 'selection.json'), marketUserDataDir: join(home, 'userdata'),
-      releaseUserDataLocations: desktopReleaseUserDataLocations(home, join(home, 'userdata')),
+      selectionStatePath: join(home, 'selection.json'), userDataDir: join(home, 'userdata'),
       launchEnvironmentLayers: [],
       // Empty is what the supervisor sends when the machine has no system proxy, so the Host still
       // installs its outbound policy here and resolves every probe to a direct connection.

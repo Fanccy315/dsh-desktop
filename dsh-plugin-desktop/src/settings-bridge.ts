@@ -1,17 +1,15 @@
 /**
- * Edition-local adapter between the shared Desktop sources and the core
- * settings surface.
+ * Adapter between the Desktop sources and the core settings surface.
  *
- * Both Desktop editions ride dsh 0.1.7, which replaced the `SettingsProvider` service
+ * Desktop rides dsh 0.1.7, which replaced the `SettingsProvider` service
  * with `SettingsForms`: a plugin no longer *registers* a namespace and schema,
  * it *declares* the editable subset of its own `Config` with `.volatile()` and
  * the Loader entry id becomes the settings namespace. Reads come from the live
  * volatile references, this fiber's changes arrive on `loader/volatile-update`,
  * and cross-plugin reads go through `SettingsForms#describe()`.
  *
- * Every shared source file calls only the edition-neutral names exported here,
- * so `scripts/verify-desktop-variants.mjs` keeps byte-comparing them against
- * the stable edition while the two implementations stay free to diverge.
+ * Every Desktop source file calls only the names exported here, so the settings
+ * surface can change without touching the consumers.
  */
 
 import type { Context, Volatile } from '@deepseek-ai/cordis'
