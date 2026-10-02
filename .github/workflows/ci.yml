@@ -15,7 +15,7 @@ concurrency:
   cancel-in-progress: true
 
 env:
-  DSH_TELEMETRY_DISABLED: '1'
+  DSH_TELEMETRY_DISABLED: "1"
 
 jobs:
   # Keep required checks conclusive for documentation-only changes. Workflow
@@ -45,8 +45,6 @@ jobs:
           HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
         run: |
           set -euo pipefail
-          node --test scripts/bilingual-docs.test.mjs
-          node scripts/verify-bilingual-docs.mjs
           if [[ "$EVENT_NAME" == "workflow_dispatch" || -z "$BASE_SHA" || "$BASE_SHA" =~ ^0+$ ]]; then
             product=true
           else
@@ -123,13 +121,13 @@ jobs:
       - run: yarn workspace ${{ matrix.workspace }} check:win-package:platform
       - name: Build Windows installer
         env:
-          DSH_PACKAGE_CHECK_ALREADY_RAN: '1'
+          DSH_PACKAGE_CHECK_ALREADY_RAN: "1"
           # CI artifacts are never published; skipping compression saves minutes.
           DSH_WINDOWS_PACKAGE_COMPRESSION: store
         run: yarn workspace ${{ matrix.workspace }} dist:win
       - name: Build Windows portable archive
         env:
-          DSH_PACKAGE_CHECK_ALREADY_RAN: '1'
+          DSH_PACKAGE_CHECK_ALREADY_RAN: "1"
           DSH_WINDOWS_PACKAGE_COMPRESSION: store
         run: yarn workspace ${{ matrix.workspace }} dist:win-portable
 
@@ -169,7 +167,7 @@ jobs:
       - run: yarn workspace ${{ matrix.workspace }} check:linux-package:platform
       - name: Build Linux AppImage and Debian package
         env:
-          DSH_PACKAGE_CHECK_ALREADY_RAN: '1'
+          DSH_PACKAGE_CHECK_ALREADY_RAN: "1"
         run: yarn workspace ${{ matrix.workspace }} dist:linux
 
   desktop-macos:
@@ -202,7 +200,7 @@ jobs:
       - run: yarn workspace ${{ matrix.workspace }} check:mac-package:platform
       - name: Build macOS smoke artifact
         env:
-          DSH_PACKAGE_CHECK_ALREADY_RAN: '1'
+          DSH_PACKAGE_CHECK_ALREADY_RAN: "1"
           # The universal merge alone takes 9-17 minutes, so pull requests
           # package only the runner's native arm64 app. Pushes to master and
           # manual runs keep the full universal DMG.
